@@ -64,7 +64,7 @@ class ConvCaps(nn.Module):
         parameter size is: K*K*B*C*P*P + B*P*P
     """
     def __init__(self, B=32, C=32, K=3, P=4, stride=2, iters=3,
-                 coor_add=False, w_shared=False):
+                 coor_add=False, w_shared=False, device='cuda'):
         super(ConvCaps, self).__init__()
         # TODO: lambda scheduler
         # Note that .contiguous() for 3+ dimensional tensors is very slow
@@ -80,7 +80,7 @@ class ConvCaps(nn.Module):
         # constant
         self.eps = 1e-8
         self._lambda = 1e-03
-        self.ln_2pi = torch.cuda.FloatTensor(1).fill_(math.log(2*math.pi))
+        self.ln_2pi = math.log(2*math.pi)
         # params
         # Note that \beta_u and \beta_a are per capsule type,
         # which are stated at https://openreview.net/forum?id=HJWLfGWRb&noteId=rJUY2VdbM
@@ -94,6 +94,9 @@ class ConvCaps(nn.Module):
         # op
         self.sigmoid = nn.Sigmoid()
         self.softmax = nn.Softmax(dim=2)
+        
+        self.to(device)
+        self.device = device
 
     def m_step(self, a_in, r, v, eps, b, B, C, psize):
         """
@@ -177,7 +180,7 @@ class ConvCaps(nn.Module):
         assert c == C
         assert (b, B, 1) == a_in.shape
 
-        r = torch.cuda.FloatTensor(b, B, C).fill_(1./C)
+        r = (torch.ones(b, B, C)/C).to(self.device)
         for iter_ in range(self.iters):
             a_out, mu, sigma_sq = self.m_step(a_in, r, v, eps, b, B, C, psize)
             if iter_ < self.iters - 1:
@@ -235,8 +238,8 @@ class ConvCaps(nn.Module):
         assert h == w
         v = v.view(b, h, w, B, C, psize)
         coor = 1. * torch.arange(h) / h
-        coor_h = torch.cuda.FloatTensor(1, h, 1, 1, 1, self.psize).fill_(0.)
-        coor_w = torch.cuda.FloatTensor(1, 1, w, 1, 1, self.psize).fill_(0.)
+        coor_h = torch.zeros(1, h, 1, 1, 1, self.psize).to(self.device)
+        coor_w = torch.zeros(1, 1, w, 1, 1, self.psize).to(self.device)
         coor_h[0, :, 0, 0, 0, 0] = coor
         coor_w[0, 0, :, 0, 0, 1] = coor
         v = v + coor_h + coor_w
@@ -317,17 +320,18 @@ class CapsNet(nn.Module):
         iters: number of EM iterations
         ...
     """
-    def __init__(self, A=32, B=32, C=32, D=32, E=10, K=3, P=4, iters=3):
+    def __init__(self, A=32, B=32, C=32, D=32, E=10, K=3, P=4, iters=3, device='cuda'):
         super(CapsNet, self).__init__()
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=A,
                                kernel_size=5, stride=2, padding=2)
         self.bn1 = nn.BatchNorm2d(num_features=A, affine=False)
         self.relu1 = nn.ReLU(inplace=False)
         self.primary_caps = PrimaryCaps(A, B, 1, P, stride=1)
-        self.conv_caps1 = ConvCaps(B, C, K, P, stride=2, iters=iters)
-        self.conv_caps2 = ConvCaps(C, D, K, P, stride=1, iters=iters)
-        self.class_caps = ConvCaps(D, E, 1, P, stride=1, iters=iters,
-                                        coor_add=True, w_shared=True) 
+        self.conv_caps1 = ConvCaps(B, C, K, P, stride=2, iters=iters, device=device)
+        self.conv_caps2 = ConvCaps(C, D, K, P, stride=1, iters=iters, device=device)
+        self.class_caps = ConvCaps(D, E, 1, P, stride=1, iters=iters, device=device,
+                                        coor_add=True, w_shared=True)
+        self.to(device)
         
     def forward(self, x):
         x = self.conv1(x)

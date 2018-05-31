@@ -155,7 +155,6 @@ def snapshot(model, folder, epoch):
     print('saving model to {}'.format(path))
     torch.save(model.state_dict(), path)
 
-
 def test(test_loader, model, criterion, device, chunk=.01):
     model.eval()
     test_loss = 0
@@ -178,7 +177,6 @@ def test(test_loader, model, criterion, device, chunk=.01):
         test_loss, acc))
     return acc
 
-
 def main():
     global args, best_prec1
     args = parser.parse_args()
@@ -197,10 +195,10 @@ def main():
     # A, B, C, D = 64, 8, 16, 16
     A, B, C, D = 32, 32, 32, 32
     model = capsules(A=A, B=B, C=C, D=D, E=num_class,
-                     iters=args.em_iters).to(device)
+                     iters=args.em_iters, device=device)
     print('Training %d parameters' % (count_parameters(model)))
 
-    criterion = SpreadLoss(num_class=num_class, m_min=0.2, m_max=0.9)
+    criterion = SpreadLoss(num_class=num_class, m_min=0.2, m_max=0.9, device=device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=1)
 
