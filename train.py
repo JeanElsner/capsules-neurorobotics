@@ -21,7 +21,7 @@ parser.add_argument('--test-batch-size', type=int, default=8, metavar='N',
 parser.add_argument('--test-intvl', type=int, default=1, metavar='N',
                     help='test intvl (default: 1)')
 parser.add_argument('--test-size', type=float, default=.01, metavar='N',
-                    help='percentage of the test set used for calculating accuracy (default: 1%)')
+                    help='percentage of the test set used for calculating accuracy (default: 1%%)')
 parser.add_argument('--epochs', type=int, default=10, metavar='N',
                     help='number of epochs to train (default: 10)')
 parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
@@ -42,14 +42,6 @@ parser.add_argument('--data-folder', type=str, default='./data', metavar='DF',
                     help='where to store the datasets')
 parser.add_argument('--dataset', type=str, default='smallNORB', metavar='D',
                     help='dataset for training(mnist, smallNORB)')
-
-
-transform = transforms.Compose(
-    [transforms.Resize((48, 48)),
-     transforms.RandomCrop(32),
-     transforms.ColorJitter(0.25, 0.25),
-     transforms.ToTensor(),
-     transforms.Normalize((0, 0, 0), (1, 1, 1))])
 
 def get_setting(args):
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
@@ -78,7 +70,8 @@ def get_setting(args):
                           transforms.Resize(48),
                           transforms.RandomCrop(32),
                           transforms.ColorJitter(brightness=32./255, contrast=0.5),
-                          transforms.ToTensor()
+                          transforms.ToTensor(),
+                          transforms.Normalize((0, 0, 0), (1, 1, 1))
                       ])),
             batch_size=args.batch_size, shuffle=True, **kwargs)
         test_loader = torch.utils.data.DataLoader(
@@ -93,22 +86,11 @@ def get_setting(args):
         raise NameError('Undefined dataset {}'.format(args.dataset))
     return num_class, train_loader, test_loader
 
+def accuracy(output, target):
+    return (target==output.max(1)[1]).sum().float()*100/len(target)
 
-def accuracy(output, target, topk=(1,)):
-    """Computes the precision@k for the specified values of k"""
-    maxk = max(topk)
-    batch_size = target.size(0)
-
-    _, pred = output.topk(maxk, 1, True, True)
-    pred = pred.t()
-    correct = pred.eq(target.view(1, -1).expand_as(pred))
-
-    res = []
-    for k in topk:
-        correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
-        res.append(correct_k.mul_(100.0 / batch_size))
-    return res
-
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
@@ -127,19 +109,17 @@ class AverageMeter(object):
         self.count += n
         self.avg = self.sum / self.count
 
-
 def train(train_loader, model, criterion, optimizer, epoch, device):
     batch_time = AverageMeter()
-    data_time = AverageMeter()
 
     model.train()
     train_len = len(train_loader)
     epoch_acc = 0
-    end = time.time()
+    toc = time.time()
+    running_acc = 0
+    running_loss = 0
 
     for batch_idx, (data, target, _) in enumerate(train_loader):
-        data_time.update(time.time() - end)
-
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
         output = model(data)
@@ -148,22 +128,25 @@ def train(train_loader, model, criterion, optimizer, epoch, device):
         acc = accuracy(output, target)
         loss.backward()
         optimizer.step()
-
-        batch_time.update(time.time() - end)
-        end = time.time()
-
-        epoch_acc += acc[0].item()
+        
+        epoch_acc += acc
+        running_acc += acc
+        running_loss += loss.item()
+        
         if batch_idx % args.log_interval == 0:
             print('Train Epoch: {}\t[{}/{} ({:.0f}%)]\t'
-                  'Loss: {:.6f}\tAccuracy: {:.6f}\t'
-                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                  'Data {data_time.val:.3f} ({data_time.avg:.3f})'.format(
+                  'Loss: {:.3f}\tAccuracy: {:.1f}\t'
+                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'.format(
                   epoch, batch_idx * len(data), len(train_loader.dataset),
                   100. * batch_idx / len(train_loader),
-                  loss.item(), acc[0].item(),
-                  batch_time=batch_time, data_time=data_time))
+                  running_loss/args.log_interval, running_acc/args.log_interval,
+                  batch_time=batch_time))
+            running_acc = 0
+            running_loss = 0
+            
+            batch_time.update(time.time() - toc)
+            toc = time.time()
     return epoch_acc
-
 
 def snapshot(model, folder, epoch):
     path = os.path.join(folder, 'model_{}.pth'.format(epoch))
@@ -173,7 +156,7 @@ def snapshot(model, folder, epoch):
     torch.save(model.state_dict(), path)
 
 
-def test(test_loader, model, criterion, device):
+def test(test_loader, model, criterion, device, chunk=.01):
     model.eval()
     test_loss = 0
     acc = 0
@@ -181,16 +164,16 @@ def test(test_loader, model, criterion, device):
     tested = 0
     with torch.no_grad():
         for data, target, _ in test_loader:
-            if tested/(args.batch_size*test_len) >= args.test_size:
+            if tested/(args.batch_size*test_len) >= chunk:
                 break
             data, target = data.to(device), target.to(device)
             output = model(data)
             test_loss += criterion(output, target, r=1).item()
-            acc += accuracy(output, target)[0].item()
+            acc += accuracy(output, target)
             tested += len(data)
 
     test_loss /= test_len
-    acc /= test_len
+    acc /= (test_len*chunk)
     print('\nTest set: Average loss: {:.6f}, Accuracy: {:.6f} \n'.format(
         test_loss, acc))
     return acc
@@ -211,23 +194,27 @@ def main():
     num_class, train_loader, test_loader = get_setting(args)
 
     # model
-    A, B, C, D = 64, 8, 16, 16
-    # A, B, C, D = 32, 32, 32, 32
+    # A, B, C, D = 64, 8, 16, 16
+    A, B, C, D = 32, 32, 32, 32
     model = capsules(A=A, B=B, C=C, D=D, E=num_class,
                      iters=args.em_iters).to(device)
+    print('Training %d parameters' % (count_parameters(model)))
 
     criterion = SpreadLoss(num_class=num_class, m_min=0.2, m_max=0.9)
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=1)
 
-    best_acc = test(test_loader, model, criterion, device)
-    for epoch in range(1, args.epochs + 1):
-        acc = train(train_loader, model, criterion, optimizer, epoch, device)
-        acc /= len(train_loader)
-        scheduler.step(acc)
-        if epoch % args.test_intvl == 0:
-            best_acc = max(best_acc, test(test_loader, model, criterion, device))
-    best_acc = max(best_acc, test(test_loader, model, criterion, device))
+    best_acc = test(test_loader, model, criterion, device, chunk=args.test_size)
+    try:
+        for epoch in range(1, args.epochs + 1):
+            acc = train(train_loader, model, criterion, optimizer, epoch, device)
+            acc /= len(train_loader)
+            scheduler.step(acc)
+            if epoch % args.test_intvl == 0:
+                best_acc = max(best_acc, test(test_loader, model, criterion, device, chunk=args.test_size))
+    except KeyboardInterrupt:
+        print('cancelled training after %d epochs' % (epoch - 1))
+    best_acc = max(best_acc, test(test_loader, model, criterion, device, chunk=args.test_size))
     print('best test accuracy: {:.6f}'.format(best_acc))
 
     snapshot(model, args.snapshot_folder, args.epochs)

@@ -321,8 +321,7 @@ class CapsNet(nn.Module):
         super(CapsNet, self).__init__()
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=A,
                                kernel_size=5, stride=2, padding=2)
-        self.bn1 = nn.BatchNorm2d(num_features=A, eps=0.001,
-                                 momentum=0.1, affine=True)
+        self.bn1 = nn.BatchNorm2d(num_features=A, affine=False)
         self.relu1 = nn.ReLU(inplace=False)
         self.primary_caps = PrimaryCaps(A, B, 1, P, stride=1)
         self.conv_caps1 = ConvCaps(B, C, K, P, stride=2, iters=iters)
