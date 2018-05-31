@@ -7,19 +7,21 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
+from vision.torchvision.datasets.smallnorb import smallNORB
 
 from model import capsules
 from loss import SpreadLoss
-from datasets import smallNORB
 
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch Matrix-Capsules-EM')
-parser.add_argument('--batch-size', type=int, default=128, metavar='N',
-                    help='input batch size for training (default: 128)')
-parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
-                    help='input batch size for testing (default: 1000)')
+parser.add_argument('--batch-size', type=int, default=8, metavar='N',
+                    help='input batch size for training (default: 8)')
+parser.add_argument('--test-batch-size', type=int, default=8, metavar='N',
+                    help='input batch size for testing (default: 8)')
 parser.add_argument('--test-intvl', type=int, default=1, metavar='N',
                     help='test intvl (default: 1)')
+parser.add_argument('--test-size', type=float, default=.01, metavar='N',
+                    help='percentage of the test set used for calculating accuracy (default: 1%)')
 parser.add_argument('--epochs', type=int, default=10, metavar='N',
                     help='number of epochs to train (default: 10)')
 parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
@@ -32,15 +34,22 @@ parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
 parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                     help='how many batches to wait before logging training status')
-parser.add_argument('--em-iters', type=int, default=2, metavar='N',
-                    help='iterations of EM Routing')
+parser.add_argument('--em-iters', type=int, default=3, metavar='N',
+                    help='iterations of EM Routing (default: 3)')
 parser.add_argument('--snapshot-folder', type=str, default='./snapshots', metavar='SF',
                     help='where to store the snapshots')
 parser.add_argument('--data-folder', type=str, default='./data', metavar='DF',
                     help='where to store the datasets')
-parser.add_argument('--dataset', type=str, default='mnist', metavar='D',
+parser.add_argument('--dataset', type=str, default='smallNORB', metavar='D',
                     help='dataset for training(mnist, smallNORB)')
 
+
+transform = transforms.Compose(
+    [transforms.Resize((48, 48)),
+     transforms.RandomCrop(32),
+     transforms.ColorJitter(0.25, 0.25),
+     transforms.ToTensor(),
+     transforms.Normalize((0, 0, 0), (1, 1, 1))])
 
 def get_setting(args):
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
@@ -128,7 +137,7 @@ def train(train_loader, model, criterion, optimizer, epoch, device):
     epoch_acc = 0
     end = time.time()
 
-    for batch_idx, (data, target) in enumerate(train_loader):
+    for batch_idx, (data, target, _) in enumerate(train_loader):
         data_time.update(time.time() - end)
 
         data, target = data.to(device), target.to(device)
@@ -169,12 +178,16 @@ def test(test_loader, model, criterion, device):
     test_loss = 0
     acc = 0
     test_len = len(test_loader)
+    tested = 0
     with torch.no_grad():
-        for data, target in test_loader:
+        for data, target, _ in test_loader:
+            if tested/(args.batch_size*test_len) >= args.test_size:
+                break
             data, target = data.to(device), target.to(device)
             output = model(data)
             test_loss += criterion(output, target, r=1).item()
             acc += accuracy(output, target)[0].item()
+            tested += len(data)
 
     test_loss /= test_len
     acc /= test_len
