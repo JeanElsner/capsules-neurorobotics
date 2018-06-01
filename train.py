@@ -9,14 +9,16 @@ import torch.optim as optim
 from torchvision import datasets, transforms
 from vision.torchvision.datasets.smallnorb import smallNORB
 
-from model import capsules
+from model import capsules, CNN
 from loss import SpreadLoss
 
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch Matrix-Capsules-EM')
-parser.add_argument('--batch-size', type=int, default=8, metavar='N',
+parser.add_argument('--model', type=str, default='em-capsules', metavar='M',
+                    help='Neural network model')
+parser.add_argument('--batch-size', type=int, default=32, metavar='N',
                     help='input batch size for training (default: 8)')
-parser.add_argument('--test-batch-size', type=int, default=8, metavar='N',
+parser.add_argument('--test-batch-size', type=int, default=32, metavar='N',
                     help='input batch size for testing (default: 8)')
 parser.add_argument('--test-intvl', type=int, default=1, metavar='N',
                     help='test intvl (default: 1)')
@@ -24,7 +26,7 @@ parser.add_argument('--test-size', type=float, default=.01, metavar='N',
                     help='percentage of the test set used for calculating accuracy (default: 1%%)')
 parser.add_argument('--epochs', type=int, default=10, metavar='N',
                     help='number of epochs to train (default: 10)')
-parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
+parser.add_argument('--lr', type=float, default=1e-2, metavar='LR',
                     help='learning rate (default: 0.01)')
 parser.add_argument('--weight-decay', type=float, default=0, metavar='WD',
                     help='weight decay (default: 0)')
@@ -70,8 +72,8 @@ def get_setting(args):
                           transforms.Resize(48),
                           transforms.RandomCrop(32),
                           transforms.ColorJitter(brightness=32./255, contrast=0.5),
-                          transforms.ToTensor(),
-                          transforms.Normalize((0, 0, 0), (1, 1, 1))
+                          transforms.ToTensor()#,
+                          #transforms.Normalize((0, 0, 0), (1, 1, 1))
                       ])),
             batch_size=args.batch_size, shuffle=True, **kwargs)
         test_loader = torch.utils.data.DataLoader(
@@ -192,10 +194,14 @@ def main():
     num_class, train_loader, test_loader = get_setting(args)
 
     # model
-    # A, B, C, D = 64, 8, 16, 16
-    A, B, C, D = 32, 32, 32, 32
-    model = capsules(A=A, B=B, C=C, D=D, E=num_class,
-                     iters=args.em_iters, device=device)
+    if args.model == 'em-capsules':
+        A, B, C, D = 64, 8, 16, 16
+        # A, B, C, D = 32, 32, 32, 32
+        model = capsules(A=A, B=B, C=C, D=D, E=num_class,
+                         iters=args.em_iters, device=device)
+    elif args.model == 'cnn':
+        model = CNN(num_class)
+        model.to(device)
     print('Training %d parameters' % (count_parameters(model)))
 
     criterion = SpreadLoss(num_class=num_class, m_min=0.2, m_max=0.9, device=device)
