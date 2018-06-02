@@ -84,13 +84,13 @@ class ConvCaps(nn.Module):
         # params
         # Note that \beta_u and \beta_a are per capsule type,
         # which are stated at https://openreview.net/forum?id=HJWLfGWRb&noteId=rJUY2VdbM
-        self.beta_u = nn.Parameter(torch.zeros(C))
-        self.beta_a = nn.Parameter(torch.zeros(C))
+        self.beta_u = nn.Parameter(torch.ones(C))
+        self.beta_a = nn.Parameter(torch.ones(C))
         # Note that the total number of trainable parameters between
         # two convolutional capsule layer types is 4*4*k*k
         # and for the whole layer is 4*4*k*k*B*C,
         # which are stated at https://openreview.net/forum?id=HJWLfGWRb&noteId=r17t2UIgf
-        self.weights = nn.Parameter(torch.randn(1, K*K*B, C, P, P))
+        self.weights = nn.Parameter(torch.ones(1, K*K*B, C, P, P))
         # op
         self.sigmoid = nn.Sigmoid()
         self.softmax = nn.Softmax(dim=2)

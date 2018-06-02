@@ -16,18 +16,18 @@ from loss import SpreadLoss
 parser = argparse.ArgumentParser(description='PyTorch Matrix-Capsules-EM')
 parser.add_argument('--model', type=str, default='em-capsules', metavar='M',
                     help='Neural network model')
-parser.add_argument('--batch-size', type=int, default=32, metavar='N',
-                    help='input batch size for training (default: 8)')
-parser.add_argument('--test-batch-size', type=int, default=32, metavar='N',
-                    help='input batch size for testing (default: 8)')
+parser.add_argument('--batch-size', type=int, default=56, metavar='N',
+                    help='input batch size for training (default: 56)')
+parser.add_argument('--test-batch-size', type=int, default=56, metavar='N',
+                    help='input batch size for testing (default: 56)')
 parser.add_argument('--test-intvl', type=int, default=1, metavar='N',
                     help='test intvl (default: 1)')
-parser.add_argument('--test-size', type=float, default=.01, metavar='N',
-                    help='percentage of the test set used for calculating accuracy (default: 1%%)')
+parser.add_argument('--test-size', type=float, default=.05, metavar='N',
+                    help='percentage of the test set used for calculating accuracy (default: 0.05)')
 parser.add_argument('--epochs', type=int, default=10, metavar='N',
                     help='number of epochs to train (default: 10)')
-parser.add_argument('--lr', type=float, default=1e-2, metavar='LR',
-                    help='learning rate (default: 0.01)')
+parser.add_argument('--lr', type=float, default=5e-2, metavar='LR',
+                    help='learning rate (default: 0.08)')
 parser.add_argument('--weight-decay', type=float, default=0, metavar='WD',
                     help='weight decay (default: 0)')
 parser.add_argument('--no-cuda', action='store_true', default=False,
@@ -135,7 +135,7 @@ def train(train_loader, model, criterion, optimizer, epoch, device):
         running_acc += acc
         running_loss += loss.item()
         
-        if batch_idx % args.log_interval == 0:
+        if batch_idx % args.log_interval == args.log_interval - 1:
             print('Train Epoch: {}\t[{}/{} ({:.0f}%)]\t'
                   'Loss: {:.3f}\tAccuracy: {:.1f}\t'
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'.format(
