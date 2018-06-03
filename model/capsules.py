@@ -322,26 +322,51 @@ class CapsNet(nn.Module):
     """
     def __init__(self, A=32, B=32, C=32, D=32, E=10, K=3, P=4, iters=3, device='cuda', _lambda=1e-3):
         super(CapsNet, self).__init__()
+        self.A, self.B, self.C, self.D, self.E, self.P = A, B, C, D, E, P
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=A,
                                kernel_size=5, stride=2, padding=2)
-        self.bn1 = nn.BatchNorm2d(num_features=A, affine=True)
         self.relu1 = nn.ReLU(inplace=False)
         self.primary_caps = PrimaryCaps(A, B, 1, P, stride=1)
         self.conv_caps1 = ConvCaps(B, C, K, P, stride=2, iters=iters, device=device, _lambda=_lambda)
         self.conv_caps2 = ConvCaps(C, D, K, P, stride=1, iters=iters, device=device, _lambda=_lambda)
         self.class_caps = ConvCaps(D, E, 1, P, stride=1, iters=iters, device=device, _lambda=_lambda,
                                         coor_add=True, w_shared=True)
+        
+        self.batch_norm_input = nn.BatchNorm2d(num_features=A, affine=True)
+        
+        self.batch_norm_3d_1 = nn.BatchNorm3d(B, affine=True)
+        self.batch_norm_2d_1 = nn.BatchNorm2d(B, affine=True)
+        
+        self.batch_norm_3d_2 = nn.BatchNorm3d(C, affine=True)
+        self.batch_norm_2d_2 = nn.BatchNorm2d(C, affine=True)
+        
+        self.batch_norm_3d_3 = nn.BatchNorm3d(D, affine=True)
+        self.batch_norm_2d_3 = nn.BatchNorm2d(D, affine=True)
+        
         self.to(device)
         
     def forward(self, x):
         x = self.conv1(x)
-        x = self.bn1(x)
+        x = self.batch_norm_input(x)
         x = self.relu1(x)
         x = self.primary_caps(x)
+        x = self.apply_batchnorm(x, self.B, self.batch_norm_2d_1, self.batch_norm_3d_1)
         x = self.conv_caps1(x) 
+        #x = self.apply_batchnorm(x, self.C, self.batch_norm_2d_2, self.batch_norm_3d_2)
         x = self.conv_caps2(x) 
+        #x = self.apply_batchnorm(x, self.D, self.batch_norm_2d_3, self.batch_norm_3d_3)
         x = self.class_caps(x)
         return x
+    
+    def apply_batchnorm(self, x, C, norm2d, norm3d):
+        pose, a = x.split(C*self.P*self.P, 3)
+        pose_view, a_view = pose.size(), a.size()
+        pose = pose.view(pose_view[0:3] + (-1, 16))
+        
+        a = norm2d(a.permute(0, 3, 1, 2).contiguous()).permute(0, 2, 3, 1)
+        pose = norm3d(pose.permute(0, 3, 1, 2, 4).contiguous()).permute(0, 2, 3, 1, 4)
+        
+        return torch.cat((pose.contiguous().view(pose_view), a.view(a_view)), dim=3)
 
 
 def capsules(**kwargs):
