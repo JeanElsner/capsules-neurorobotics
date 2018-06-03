@@ -64,7 +64,7 @@ class ConvCaps(nn.Module):
         parameter size is: K*K*B*C*P*P + B*P*P
     """
     def __init__(self, B=32, C=32, K=3, P=4, stride=2, iters=3,
-                 coor_add=False, w_shared=False, device='cuda'):
+                 coor_add=False, w_shared=False, device='cuda', _lambda=1e-3):
         super(ConvCaps, self).__init__()
         # TODO: lambda scheduler
         # Note that .contiguous() for 3+ dimensional tensors is very slow
@@ -79,7 +79,7 @@ class ConvCaps(nn.Module):
         self.w_shared = w_shared
         # constant
         self.eps = 1e-8
-        self._lambda = 1e-03
+        self._lambda = _lambda
         self.ln_2pi = math.log(2*math.pi)
         # params
         # Note that \beta_u and \beta_a are per capsule type,
@@ -98,7 +98,7 @@ class ConvCaps(nn.Module):
         self.to(device)
         self.device = device
 
-    def m_step(self, a_in, r, v, eps, b, B, C, psize):
+    def m_step(self, a_in, r, v, eps, b, B, C, psize, _lambda):
         """
             \mu^h_j = \dfrac{\sum_i r_{ij} V^h_{ij}}{\sum_i r_{ij}}
             (\sigma^h_j)^2 = \dfrac{\sum_i r_{ij} (V^h_{ij} - mu^h_j)^2}{\sum_i r_{ij}}
@@ -130,7 +130,7 @@ class ConvCaps(nn.Module):
         sigma_sq = sigma_sq.view(b, C, psize)
         cost_h = (self.beta_u.view(C, 1) + torch.log(sigma_sq.sqrt())) * r_sum
 
-        a_out = self.sigmoid(self._lambda*(self.beta_a - cost_h.sum(dim=2)))
+        a_out = self.sigmoid(_lambda*(self.beta_a - cost_h.sum(dim=2)))
         sigma_sq = sigma_sq.view(b, 1, C, psize)
 
         return a_out, mu, sigma_sq
@@ -182,13 +182,13 @@ class ConvCaps(nn.Module):
 
         r = (torch.ones(b, B, C)/C).to(self.device)
         for iter_ in range(self.iters):
-            a_out, mu, sigma_sq = self.m_step(a_in, r, v, eps, b, B, C, psize)
+            a_out, mu, sigma_sq = self.m_step(a_in, r, v, eps, b, B, C, psize, self._lambda*(iter_*.2+1))
             if iter_ < self.iters - 1:
                 r = self.e_step(mu, sigma_sq, a_out, v, eps, b, C)
 
         return mu, a_out
 
-    def add_pathes(self, x, B, K, psize, stride):
+    def add_patches(self, x, B, K, psize, stride):
         """
             Shape:
                 Input:     (b, H, W, B*(P*P+1))
@@ -250,7 +250,7 @@ class ConvCaps(nn.Module):
         b, h, w, c = x.shape
         if not self.w_shared:
             # add patches
-            x, oh, ow = self.add_pathes(x, self.B, self.K, self.psize, self.stride)
+            x, oh, ow = self.add_patches(x, self.B, self.K, self.psize, self.stride)
 
             # transform view
             p_in = x[:, :, :, :, :, :self.B*self.psize].contiguous()
@@ -320,16 +320,16 @@ class CapsNet(nn.Module):
         iters: number of EM iterations
         ...
     """
-    def __init__(self, A=32, B=32, C=32, D=32, E=10, K=3, P=4, iters=3, device='cuda'):
+    def __init__(self, A=32, B=32, C=32, D=32, E=10, K=3, P=4, iters=3, device='cuda', _lambda=1e-3):
         super(CapsNet, self).__init__()
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=A,
                                kernel_size=5, stride=2, padding=2)
         self.bn1 = nn.BatchNorm2d(num_features=A, affine=True)
         self.relu1 = nn.ReLU(inplace=False)
         self.primary_caps = PrimaryCaps(A, B, 1, P, stride=1)
-        self.conv_caps1 = ConvCaps(B, C, K, P, stride=2, iters=iters, device=device)
-        self.conv_caps2 = ConvCaps(C, D, K, P, stride=1, iters=iters, device=device)
-        self.class_caps = ConvCaps(D, E, 1, P, stride=1, iters=iters, device=device,
+        self.conv_caps1 = ConvCaps(B, C, K, P, stride=2, iters=iters, device=device, _lambda=_lambda)
+        self.conv_caps2 = ConvCaps(C, D, K, P, stride=1, iters=iters, device=device, _lambda=_lambda)
+        self.class_caps = ConvCaps(D, E, 1, P, stride=1, iters=iters, device=device, _lambda=_lambda,
                                         coor_add=True, w_shared=True)
         self.to(device)
         

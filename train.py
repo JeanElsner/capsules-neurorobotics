@@ -26,7 +26,7 @@ parser.add_argument('--test-size', type=float, default=.05, metavar='N',
                     help='percentage of the test set used for calculating accuracy (default: 0.05)')
 parser.add_argument('--epochs', type=int, default=10, metavar='N',
                     help='number of epochs to train (default: 10)')
-parser.add_argument('--lr', type=float, default=5e-2, metavar='LR',
+parser.add_argument('--lr', type=float, default=1e-4, metavar='LR',
                     help='learning rate (default: 0.08)')
 parser.add_argument('--weight-decay', type=float, default=0, metavar='WD',
                     help='weight decay (default: 0)')
@@ -44,6 +44,8 @@ parser.add_argument('--data-folder', type=str, default='./data', metavar='DF',
                     help='where to store the datasets')
 parser.add_argument('--dataset', type=str, default='smallNORB', metavar='D',
                     help='dataset for training(mnist, smallNORB)')
+parser.add_argument('--inv-temp', type=float, default=1e-3, metavar='N',
+                    help='Inverse temperature parameter for the EM algorithm')
 
 def get_setting(args):
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
@@ -148,7 +150,7 @@ def train(train_loader, model, criterion, optimizer, epoch, device):
             
             batch_time.update(time.time() - toc)
             toc = time.time()
-    return epoch_acc
+    return epoch_acc/len(train_loader)
 
 def snapshot(model, folder, epoch):
     path = os.path.join(folder, 'model_{}.pth'.format(epoch))
@@ -198,7 +200,7 @@ def main():
         A, B, C, D = 64, 8, 16, 16
         # A, B, C, D = 32, 32, 32, 32
         model = capsules(A=A, B=B, C=C, D=D, E=num_class,
-                         iters=args.em_iters, device=device)
+                         iters=args.em_iters, device=device, _lambda=args.inv_temp)
     elif args.model == 'cnn':
         model = CNN(num_class)
         model.to(device)
@@ -212,7 +214,6 @@ def main():
     try:
         for epoch in range(1, args.epochs + 1):
             acc = train(train_loader, model, criterion, optimizer, epoch, device)
-            acc /= len(train_loader)
             scheduler.step(acc)
             if epoch % args.test_intvl == 0:
                 best_acc = max(best_acc, test(test_loader, model, criterion, device, chunk=args.test_size))
