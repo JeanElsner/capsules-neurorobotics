@@ -38,18 +38,20 @@ parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                     help='how many batches to wait before logging training status')
 parser.add_argument('--em-iters', type=int, default=3, metavar='N',
                     help='iterations of EM Routing (default: 3)')
-parser.add_argument('--snapshot-folder', type=str, default='./snapshots', metavar='SF',
+parser.add_argument('--snapshot-dir', type=str, default='./snapshots', metavar='SF',
                     help='where to store the snapshots')
-parser.add_argument('--data-folder', type=str, default='./data', metavar='DF',
+parser.add_argument('--data-dir', type=str, default='./data', metavar='DF',
                     help='where to store the datasets')
 parser.add_argument('--dataset', type=str, default='smallNORB', metavar='D',
                     help='dataset for training(mnist, smallNORB)')
 parser.add_argument('--inv-temp', type=float, default=1e-3, metavar='N',
                     help='Inverse temperature parameter for the EM algorithm')
+parser.add_argument('--snapshot', type=str, default='', metavar='SNP',
+                    help='Use pretrained network from snapshot')
 
 def get_setting(args):
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
-    path = os.path.join(args.data_folder, args.dataset)
+    path = os.path.join(args.data_dir, args.dataset)
     if args.dataset == 'mnist':
         num_class = 10
         train_loader = torch.utils.data.DataLoader(
@@ -153,7 +155,7 @@ def train(train_loader, model, criterion, optimizer, epoch, device):
     return epoch_acc/len(train_loader)
 
 def snapshot(model, folder, epoch):
-    path = os.path.join(folder, 'model_{}.pth'.format(epoch))
+    path = os.path.join(folder, '{}_{}.pth'.format(model.__class__.__name__, epoch))
     if not os.path.exists(os.path.dirname(path)):
         os.makedirs(os.path.dirname(path))
     print('saving model to {}'.format(path))
@@ -206,6 +208,10 @@ def main():
         model.to(device)
     print('Training %d parameters' % (count_parameters(model)))
 
+    if args.snapshot:
+        print('Pretrained model from snapshot %s' % (args.snapshot))
+        model.load_state_dict(torch.load(args.snapshot))
+
     criterion = SpreadLoss(num_class=num_class, m_min=0.2, m_max=0.9, device=device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=1)
@@ -219,10 +225,12 @@ def main():
                 best_acc = max(best_acc, test(test_loader, model, criterion, device, chunk=args.test_size))
     except KeyboardInterrupt:
         print('cancelled training after %d epochs' % (epoch - 1))
+        args.epochs = epoch - 1
+        
     best_acc = max(best_acc, test(test_loader, model, criterion, device, chunk=args.test_size))
     print('best test accuracy: {:.6f}'.format(best_acc))
 
-    snapshot(model, args.snapshot_folder, args.epochs)
+    snapshot(model, args.snapshot_dir, args.epochs)
 
 if __name__ == '__main__':
     main()
