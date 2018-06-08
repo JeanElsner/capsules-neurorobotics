@@ -84,13 +84,13 @@ class ConvCaps(nn.Module):
         # params
         # Note that \beta_u and \beta_a are per capsule type,
         # which are stated at https://openreview.net/forum?id=HJWLfGWRb&noteId=rJUY2VdbM
-        self.beta_u = nn.Parameter(torch.ones(C))
-        self.beta_a = nn.Parameter(torch.ones(C))
+        self.beta_u = nn.Parameter(torch.ones(C)/C)
+        self.beta_a = nn.Parameter(torch.ones(C)/C)
         # Note that the total number of trainable parameters between
         # two convolutional capsule layer types is 4*4*k*k
         # and for the whole layer is 4*4*k*k*B*C,
         # which are stated at https://openreview.net/forum?id=HJWLfGWRb&noteId=r17t2UIgf
-        self.weights = nn.Parameter(torch.ones(1, K*K*B, C, P, P))
+        self.weights = nn.Parameter(torch.randn(1, K*K*B, C, P, P)/(P*P))
         # op
         self.sigmoid = nn.Sigmoid()
         self.softmax = nn.Softmax(dim=2)
@@ -182,7 +182,8 @@ class ConvCaps(nn.Module):
 
         r = (torch.ones(b, B, C)/C).to(self.device)
         for iter_ in range(self.iters):
-            a_out, mu, sigma_sq = self.m_step(a_in, r, v, eps, b, B, C, psize, self._lambda*(iter_*.2+1))
+            #torch.autograd.set_grad_enabled(iter_ == (self.iters - 1))
+            a_out, mu, sigma_sq = self.m_step(a_in, r, v, eps, b, B, C, psize, self._lambda*(iter_*.01+1))
             if iter_ < self.iters - 1:
                 r = self.e_step(mu, sigma_sq, a_out, v, eps, b, C)
 
@@ -286,7 +287,7 @@ class ConvCaps(nn.Module):
         return out
 
 
-class CapsNet(nn.Module):
+class MatrixCapsules(nn.Module):
     """A network with one ReLU convolutional layer followed by
     a primary convolutional capsule layer and two more convolutional capsule layers.
 
@@ -320,16 +321,16 @@ class CapsNet(nn.Module):
         iters: number of EM iterations
         ...
     """
-    def __init__(self, A=32, B=32, C=32, D=32, E=10, K=3, P=4, iters=3, device='cuda', _lambda=1e-3):
-        super(CapsNet, self).__init__()
+    def __init__(self, A=32, B=32, C=32, D=32, E=10, K=3, P=4, iters=3, device='cuda', _lambda=[1e-3, 1e-3, 1e-3]):
+        super(MatrixCapsules, self).__init__()
         self.A, self.B, self.C, self.D, self.E, self.P = A, B, C, D, E, P
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=A,
                                kernel_size=5, stride=2, padding=2)
         self.relu1 = nn.ReLU(inplace=False)
         self.primary_caps = PrimaryCaps(A, B, 1, P, stride=1)
-        self.conv_caps1 = ConvCaps(B, C, K, P, stride=2, iters=iters, device=device, _lambda=_lambda)
-        self.conv_caps2 = ConvCaps(C, D, K, P, stride=1, iters=iters, device=device, _lambda=_lambda)
-        self.class_caps = ConvCaps(D, E, 1, P, stride=1, iters=iters, device=device, _lambda=_lambda,
+        self.conv_caps1 = ConvCaps(B, C, K, P, stride=2, iters=iters, device=device, _lambda=_lambda[0])
+        self.conv_caps2 = ConvCaps(C, D, K, P, stride=1, iters=iters, device=device, _lambda=_lambda[1])
+        self.class_caps = ConvCaps(D, E, 1, P, stride=1, iters=iters, device=device, _lambda=_lambda[2],
                                         coor_add=True, w_shared=True)
         
         self.batch_norm_input = nn.BatchNorm2d(num_features=A, affine=True)
@@ -350,7 +351,7 @@ class CapsNet(nn.Module):
         x = self.batch_norm_input(x)
         x = self.relu1(x)
         x = self.primary_caps(x)
-        x = self.apply_batchnorm(x, self.B, self.batch_norm_2d_1, self.batch_norm_3d_1)
+        #x = self.apply_batchnorm(x, self.B, self.batch_norm_2d_1, self.batch_norm_3d_1)
         x = self.conv_caps1(x) 
         #x = self.apply_batchnorm(x, self.C, self.batch_norm_2d_2, self.batch_norm_3d_2)
         x = self.conv_caps2(x) 
@@ -367,22 +368,3 @@ class CapsNet(nn.Module):
         pose = norm3d(pose.permute(0, 3, 1, 2, 4).contiguous()).permute(0, 2, 3, 1, 4)
         
         return torch.cat((pose.contiguous().view(pose_view), a.view(a_view)), dim=3)
-
-
-def capsules(**kwargs):
-    """Constructs a CapsNet model.
-    """
-    model = CapsNet(**kwargs)
-    return model
-
-
-'''
-TEST
-Run this code with:
-```
-python -m capsules.py
-```
-'''
-if __name__ == '__main__':
-    model = capsules(E=10)
-    print(model)
