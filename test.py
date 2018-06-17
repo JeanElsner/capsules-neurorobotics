@@ -89,7 +89,7 @@ def test(test_loader, model, criterion, device, chunk=.01):
             if tested/(args.test_batch_size*test_len) >= chunk:
                 break
             data, target = data.to(device), target.to(device)
-            output = model(data)
+            output = model(data, 1)
             test_loss += criterion(output, target, r=1).item()
             acc += accuracy(output, target)
             tested += len(data)
@@ -117,10 +117,9 @@ def main():
     # model
     if args.model == 'matrix-capsules':
         A, B, C, D = 64, 8, 16, 16
-        # A, B, C, D = 32, 32, 32, 32
         model = MatrixCapsules(A=A, B=B, C=C, D=D, E=num_class, 
-                               iters=args.em_iters, device=device)
-                               #_lambda=args.inv_temp)
+                               iters=args.em_iters, device=device,
+                               _lambda=[[1e-4, 1e-2], [1e-4, 1e-2], [1e-4, 1e-2]])
     elif args.model == 'cnn':
         model = CNN(num_class)
         model.to(device)

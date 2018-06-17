@@ -14,9 +14,9 @@ from utils import AverageMeter, accuracy, count_parameters, snapshot
 parser = argparse.ArgumentParser(description='PyTorch Matrix-Capsules-EM')
 parser.add_argument('--model', type=str, default='matrix-capsules', metavar='M',
                     help='Neural network model')
-parser.add_argument('--batch-size', type=int, default=56, metavar='N',
+parser.add_argument('--batch-size', type=int, default=32, metavar='N',
                     help='input batch size for training (default: 56)')
-parser.add_argument('--test-batch-size', type=int, default=256, metavar='N',
+parser.add_argument('--test-batch-size', type=int, default=1, metavar='N',
                     help='input batch size for testing (default: 56)')
 parser.add_argument('--test-intvl', type=int, default=1, metavar='N',
                     help='test intvl (default: 1)')
@@ -24,7 +24,7 @@ parser.add_argument('--test-size', type=float, default=.1, metavar='N',
                     help='percentage of the test set used for calculating accuracy (default: 0.05)')
 parser.add_argument('--epochs', type=int, default=100, metavar='N',
                     help='number of epochs to train (default: 10)')
-parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
+parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
                     help='learning rate (default: 0.08)')
 parser.add_argument('--weight-decay', type=float, default=0, metavar='WD',
                     help='weight decay (default: 0)')
@@ -87,19 +87,19 @@ def train(train_loader, model, criterion, optimizer, epoch, device):
     running_loss = 0
 
     for batch_idx, (data, target, _) in enumerate(train_loader):
+        r = (1.*batch_idx + (epoch-1)*train_len) / (args.epochs*train_len)
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
-        output = model(data)
-        r = (1.*batch_idx + (epoch-1)*train_len) / (args.epochs*train_len)
+        output = model(data, r)
         loss = criterion(output, target, r)
         acc = accuracy(output, target)
         loss.backward()
         optimizer.step()
-        
+
         epoch_acc += acc
         running_acc += acc
         running_loss += loss.item()
-        
+
         if batch_idx % args.log_interval == args.log_interval - 1:
             batch_time.update(time.time() - toc)
             toc = time.time()
@@ -115,6 +115,7 @@ def train(train_loader, model, criterion, optimizer, epoch, device):
     return epoch_acc/len(train_loader)
 
 def test(test_loader, model, criterion, device, chunk=.01):
+    return 0
     model.eval()
     test_loss = 0
     acc = 0
@@ -125,7 +126,7 @@ def test(test_loader, model, criterion, device, chunk=.01):
             if tested/(args.test_batch_size*test_len) >= chunk:
                 break
             data, target = data.to(device), target.to(device)
-            output = model(data)
+            output = model(data, 1)
             test_loss += criterion(output, target, r=1).item()
             acc += accuracy(output, target)
             tested += len(data)
@@ -146,23 +147,21 @@ def main():
     #    torch.cuda.manual_seed(args.seed)
 
     device = torch.device("cuda" if args.cuda else "cpu")
-    
+
     # datasets
     num_class, train_loader, test_loader = get_setting(args)
 
     # model
     if args.model == 'matrix-capsules':
         A, B, C, D = 64, 8, 16, 16
-        # A, B, C, D = 32, 32, 32, 32
         model = MatrixCapsules(A=A, B=B, C=C, D=D, E=num_class, 
-                               iters=args.em_iters, device=device)
-                               #_lambda=args.inv_temp)
+                               iters=args.em_iters, device=device,
+                               _lambda=[[1e-4, 1e-2], [1e-4, 1e-2], [1e-4, 1e-2]])
     elif args.model == 'cnn':
         model = CNN(num_class)
-        model.to(device)
     elif args.model == 'vector-capsules':
         model = VectorCapsules(3, num_classes=num_class)
-        model.to(device)
+    model.to(device)
     print('Training %d parameters' % (count_parameters(model)))
 
     if args.snapshot:
@@ -170,20 +169,23 @@ def main():
         model.load_state_dict(torch.load(args.snapshot))
 
     criterion = SpreadLoss(num_class=num_class, m_min=0.2, m_max=0.9, device=device)
-    optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = optim.RMSprop(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, momentum=.5)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=1)
 
     best_acc = test(test_loader, model, criterion, device, chunk=args.test_size)
     try:
         for epoch in range(args.start_epoch, args.epochs + 1):
+            print()
             acc = train(train_loader, model, criterion, optimizer, epoch, device)
             scheduler.step(acc)
+            print('Epoch accuracy was %.1f%%. Learning rate is %.9f.' % 
+                  (acc, optimizer.state_dict()['param_groups'][0]['lr']))
             if epoch % args.test_intvl == 0:
                 best_acc = max(best_acc, test(test_loader, model, criterion, device, chunk=args.test_size))
     except KeyboardInterrupt:
         print('Cancelled training after %d epochs' % (epoch - 1))
         args.epochs = epoch - 1
-        
+
     best_acc = max(best_acc, test(test_loader, model, criterion, device, chunk=args.test_size))
     print('Best test accuracy: {:.6f}'.format(best_acc))
 

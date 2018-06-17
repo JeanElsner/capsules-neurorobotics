@@ -64,7 +64,7 @@ class ConvCaps(nn.Module):
         parameter size is: K*K*B*C*P*P + B*P*P
     """
     def __init__(self, B=32, C=32, K=3, P=4, stride=2, iters=3,
-                 coor_add=False, w_shared=False, device='cuda', _lambda=1e-3):
+                 coor_add=False, w_shared=False, device='cuda', _lambda=[]):
         super(ConvCaps, self).__init__()
         # TODO: lambda scheduler
         # Note that .contiguous() for 3+ dimensional tensors is very slow
@@ -79,7 +79,7 @@ class ConvCaps(nn.Module):
         self.w_shared = w_shared
         # constant
         self.eps = 1e-8
-        self._lambda = _lambda
+        self._lambda = torch.tensor(_lambda).to(device)
         self.ln_2pi = math.log(2*math.pi)
         # params
         # Note that \beta_u and \beta_a are per capsule type,
@@ -98,7 +98,7 @@ class ConvCaps(nn.Module):
         self.to(device)
         self.device = device
 
-    def m_step(self, a_in, r, v, eps, b, B, C, psize, _lambda):
+    def m_step(self, a_in, R, v, eps, b, B, C, psize, _lambda):
         """
             \mu^h_j = \dfrac{\sum_i r_{ij} V^h_{ij}}{\sum_i r_{ij}}
             (\sigma^h_j)^2 = \dfrac{\sum_i r_{ij} (V^h_{ij} - mu^h_j)^2}{\sum_i r_{ij}}
@@ -107,28 +107,28 @@ class ConvCaps(nn.Module):
 
             Input:
                 a_in:      (b, C, 1)
-                r:         (b, B, C, 1)
+                R:         (b, B, C, 1)
                 v:         (b, B, C, P*P)
             Local:
                 cost_h:    (b, C, P*P)
-                r_sum:     (b, C, 1)
+                R_sum:     (b, C, 1)
             Output:
                 a_out:     (b, C, 1)
                 mu:        (b, 1, C, P*P)
                 sigma_sq:  (b, 1, C, P*P)
         """
-        r = r * a_in
-        r = r / (r.sum(dim=2, keepdim=True) + eps)
-        r_sum = r.sum(dim=1, keepdim=True)
-        coeff = r / (r_sum + eps)
+        R = R * a_in
+        R = R / (R.sum(dim=2, keepdim=True) + eps)
+        R_sum = R.sum(dim=1, keepdim=True)
+        coeff = R / (R_sum + eps)
         coeff = coeff.view(b, B, C, 1)
 
         mu = torch.sum(coeff * v, dim=1, keepdim=True)
         sigma_sq = torch.sum(coeff * (v - mu)**2, dim=1, keepdim=True) + eps
 
-        r_sum = r_sum.view(b, C, 1)
+        R_sum = R_sum.view(b, C, 1)
         sigma_sq = sigma_sq.view(b, C, psize)
-        cost_h = (self.beta_u.view(C, 1) + torch.log(sigma_sq.sqrt())) * r_sum
+        cost_h = (self.beta_u.view(C, 1) + torch.log(sigma_sq.sqrt())) * R_sum
 
         a_out = self.sigmoid(_lambda*(self.beta_a - cost_h.sum(dim=2)))
         sigma_sq = sigma_sq.view(b, 1, C, psize)
@@ -161,7 +161,7 @@ class ConvCaps(nn.Module):
         r = self.softmax(ln_ap)
         return r
 
-    def caps_em_routing(self, v, a_in, C, eps):
+    def caps_em_routing(self, v, a_in, C, eps, r):
         """
             Input:
                 v:         (b, B, C, P*P)
@@ -179,13 +179,14 @@ class ConvCaps(nn.Module):
         b, B, c, psize = v.shape
         assert c == C
         assert (b, B, 1) == a_in.shape
-
-        r = (torch.ones(b, B, C)/C).to(self.device)
+        
+        R = (torch.ones(b, B, C)/C).to(self.device)
         for iter_ in range(self.iters):
             #torch.autograd.set_grad_enabled(iter_ == (self.iters - 1))
-            a_out, mu, sigma_sq = self.m_step(a_in, r, v, eps, b, B, C, psize, self._lambda*(iter_*.01+1))
+            #a_out, mu, sigma_sq = self.m_step(a_in, r, v, eps, b, B, C, psize, self._lambda*(iter_*.01+1))
+            a_out, mu, sigma_sq = self.m_step(a_in, R, v, eps, b, B, C, psize, self._lambda[0]+(self._lambda[1]-self._lambda[0])*r)
             if iter_ < self.iters - 1:
-                r = self.e_step(mu, sigma_sq, a_out, v, eps, b, C)
+                R = self.e_step(mu, sigma_sq, a_out, v, eps, b, C)
 
         return mu, a_out
 
@@ -247,7 +248,7 @@ class ConvCaps(nn.Module):
         v = v.view(b, h*w*B, C, psize)
         return v
 
-    def forward(self, x):
+    def forward(self, x, r):
         b, h, w, c = x.shape
         if not self.w_shared:
             # add patches
@@ -261,7 +262,7 @@ class ConvCaps(nn.Module):
             v = self.transform_view(p_in, self.weights, self.C, self.P)
 
             # em_routing
-            p_out, a_out = self.caps_em_routing(v, a_in, self.C, self.eps)
+            p_out, a_out = self.caps_em_routing(v, a_in, self.C, self.eps, r)
             p_out = p_out.view(b, oh, ow, self.C*self.psize)
             a_out = a_out.view(b, oh, ow, self.C)
             out = torch.cat([p_out, a_out], dim=3)
@@ -282,7 +283,7 @@ class ConvCaps(nn.Module):
                 v = self.add_coord(v, b, h, w, self.B, self.C, self.psize)
 
             # em_routing
-            _, out = self.caps_em_routing(v, a_in, self.C, self.eps)
+            _, out = self.caps_em_routing(v, a_in, self.C, self.eps, r)
 
         return out
 
@@ -321,19 +322,21 @@ class MatrixCapsules(nn.Module):
         iters: number of EM iterations
         ...
     """
-    def __init__(self, A=32, B=32, C=32, D=32, E=10, K=3, P=4, iters=3, device='cuda', _lambda=[1e-3, 1e-3, 1e-3]):
+    def __init__(self, A=32, B=32, C=32, D=32, E=10, K=3, P=4, iters=3, device='cuda', _lambda=[]):
         super(MatrixCapsules, self).__init__()
         self.A, self.B, self.C, self.D, self.E, self.P = A, B, C, D, E, P
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=A,
                                kernel_size=5, stride=2, padding=2)
         self.relu1 = nn.ReLU(inplace=False)
         self.primary_caps = PrimaryCaps(A, B, 1, P, stride=1)
+        
         self.conv_caps1 = ConvCaps(B, C, K, P, stride=2, iters=iters, device=device, _lambda=_lambda[0])
         self.conv_caps2 = ConvCaps(C, D, K, P, stride=1, iters=iters, device=device, _lambda=_lambda[1])
         self.class_caps = ConvCaps(D, E, 1, P, stride=1, iters=iters, device=device, _lambda=_lambda[2],
                                         coor_add=True, w_shared=True)
         
         self.batch_norm_input = nn.BatchNorm2d(num_features=A, affine=True)
+        self.drop_out_input = nn.Dropout2d(p=.2)
         
         self.batch_norm_3d_1 = nn.BatchNorm3d(B, affine=True)
         self.batch_norm_2d_1 = nn.BatchNorm2d(B, affine=True)
@@ -344,19 +347,32 @@ class MatrixCapsules(nn.Module):
         self.batch_norm_3d_3 = nn.BatchNorm3d(D, affine=True)
         self.batch_norm_2d_3 = nn.BatchNorm2d(D, affine=True)
         
+        self.drop_out_3d_1 = nn.Dropout3d(p=.1)
+        self.drop_out_2d_1 = nn.Dropout2d(p=.1)
+        
+        self.drop_out_3d_2 = nn.Dropout3d(p=.1)
+        self.drop_out_2d_2 = nn.Dropout2d(p=.1)
+        
+        self.drop_out_3d_3 = nn.Dropout3d(p=.1)
+        self.drop_out_2d_3 = nn.Dropout2d(p=.1)
+        
         self.to(device)
         
-    def forward(self, x):
+    def forward(self, x, r):
         x = self.conv1(x)
         x = self.batch_norm_input(x)
+        x = self.drop_out_input(x)
         x = self.relu1(x)
         x = self.primary_caps(x)
         #x = self.apply_batchnorm(x, self.B, self.batch_norm_2d_1, self.batch_norm_3d_1)
-        x = self.conv_caps1(x) 
+        #x = self.apply_dropout(x, self.B, self.drop_out_2d_1, self.batch_norm_3d_1)
+        x = self.conv_caps1(x, r)
         #x = self.apply_batchnorm(x, self.C, self.batch_norm_2d_2, self.batch_norm_3d_2)
-        x = self.conv_caps2(x) 
+        #x = self.apply_dropout(x, self.C, self.drop_out_2d_2, self.batch_norm_3d_2)
+        x = self.conv_caps2(x, r)
         #x = self.apply_batchnorm(x, self.D, self.batch_norm_2d_3, self.batch_norm_3d_3)
-        x = self.class_caps(x)
+        #x = self.apply_dropout(x, self.D, self.drop_out_2d_3, self.batch_norm_3d_3)
+        x = self.class_caps(x, r)
         return x
     
     def apply_batchnorm(self, x, C, norm2d, norm3d):
@@ -368,3 +384,14 @@ class MatrixCapsules(nn.Module):
         pose = norm3d(pose.permute(0, 3, 1, 2, 4).contiguous()).permute(0, 2, 3, 1, 4)
         
         return torch.cat((pose.contiguous().view(pose_view), a.view(a_view)), dim=3)
+    
+    def apply_dropout(self, x, C, dropout2d, dropout3d):
+        pose, a = x.split(C*self.P*self.P, 3)
+        pose_view, a_view = pose.size(), a.size()
+        pose = pose.view(pose_view[0:3] + (-1, 16))
+        
+        a = dropout2d(a.permute(0, 3, 1, 2).contiguous()).permute(0, 2, 3, 1)
+        pose = dropout3d(pose.permute(0, 3, 1, 2, 4).contiguous()).permute(0, 2, 3, 1, 4)
+        
+        return torch.cat((pose.contiguous().view(pose_view), a.view(a_view)), dim=3)
+    
