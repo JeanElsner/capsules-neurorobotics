@@ -23,7 +23,7 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
-parser.add_argument('--em-iters', type=int, default=2, metavar='N',
+parser.add_argument('--em-iters', type=int, default=3, metavar='N',
                     help='iterations of EM Routing (default: 3)')
 parser.add_argument('--snapshot-dir', type=str, default='./snapshots', metavar='SD',
                     help='where to store the snapshots')
@@ -116,7 +116,7 @@ def main():
 
     # model
     if args.model == 'matrix-capsules':
-        A, B, C, D = 64, 8, 16, 16
+        A, B, C, D = 64, 8, 16, 32
         model = MatrixCapsules(A=A, B=B, C=C, D=D, E=num_class, 
                                iters=args.em_iters, device=device,
                                _lambda=[[1e-4, 1e-2], [1e-4, 1e-2], [1e-4, 1e-2]])

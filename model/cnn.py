@@ -10,7 +10,7 @@ class CNN(nn.Module):
         self.fc1 = nn.Linear(64*5*5, 1024)
         self.fc2 = nn.Linear(1024, num_classes)
 
-    def forward(self, x):
+    def forward(self, x, r):
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
         x = x.view(-1, 64*5*5)

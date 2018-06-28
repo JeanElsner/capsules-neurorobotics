@@ -32,7 +32,7 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
-parser.add_argument('--log-interval', type=int, default=10, metavar='N',
+parser.add_argument('--log-interval', type=int, default=100, metavar='N',
                     help='how many batches to wait before logging training status')
 parser.add_argument('--em-iters', type=int, default=2, metavar='N',
                     help='iterations of EM Routing (default: 3)')
@@ -154,6 +154,7 @@ def main():
     # model
     if args.model == 'matrix-capsules':
         A, B, C, D = 64, 8, 16, 16
+        #A, B, C, D = 32, 32, 32, 32
         model = MatrixCapsules(A=A, B=B, C=C, D=D, E=num_class, 
                                iters=args.em_iters, device=device,
                                _lambda=[[1e-4, 1e-2], [1e-4, 1e-2], [1e-4, 1e-2]])
@@ -169,7 +170,7 @@ def main():
         model.load_state_dict(torch.load(args.snapshot))
 
     criterion = SpreadLoss(num_class=num_class, m_min=0.2, m_max=0.9, device=device)
-    optimizer = optim.RMSprop(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, momentum=.5)
+    optimizer = optim.RMSprop(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)#, momentum=.9)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=1)
 
     best_acc = test(test_loader, model, criterion, device, chunk=args.test_size)

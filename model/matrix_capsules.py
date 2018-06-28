@@ -63,6 +63,7 @@ class ConvCaps(nn.Module):
         h', w' is computed the same way as convolution layer
         parameter size is: K*K*B*C*P*P + B*P*P
     """
+    # cost = (beta_u+log(((f(x)*(V_ij-mu)^2)/(g(x)))^(1/2)))*h(x)
     def __init__(self, B=32, C=32, K=3, P=4, stride=2, iters=3,
                  coor_add=False, w_shared=False, device='cuda', _lambda=[]):
         super(ConvCaps, self).__init__()
@@ -81,22 +82,63 @@ class ConvCaps(nn.Module):
         self.eps = 1e-8
         self._lambda = torch.tensor(_lambda).to(device)
         self.ln_2pi = math.log(2*math.pi)
+        self.sqrt_2 = math.sqrt(2)
         # params
         # Note that \beta_u and \beta_a are per capsule type,
         # which are stated at https://openreview.net/forum?id=HJWLfGWRb&noteId=rJUY2VdbM
-        self.beta_u = nn.Parameter(torch.ones(C)/C)
-        self.beta_a = nn.Parameter(torch.ones(C)/C)
-        # Note that the total number of trainable parameters between
-        # two convolutional capsule layer types is 4*4*k*k
-        # and for the whole layer is 4*4*k*k*B*C,
-        # which are stated at https://openreview.net/forum?id=HJWLfGWRb&noteId=r17t2UIgf
-        self.weights = nn.Parameter(torch.randn(1, K*K*B, C, P, P)/(P*P))
+        self.beta_u = nn.Parameter(torch.ones(C))
+        self.beta_a = nn.Parameter(torch.ones(C))
+        # Sparsifying the transformation matrices
+        randn = torch.randn(1, K*K*B, C, P, P)
+        p = torch.full_like(randn, .5).bernoulli()
+        self.weights = nn.Parameter(randn*p/(P*P))
+        
         # op
         self.sigmoid = nn.Sigmoid()
         self.softmax = nn.Softmax(dim=2)
         
         self.to(device)
         self.device = device
+
+    def mmstep(self, a_i, R, V, _lambda, beta_a, beta_u):
+        """
+            \mu^h_j = \dfrac{\sum_i r_{ij} V^h_{ij}}{\sum_i r_{ij}}
+            (\sigma^h_j)^2 = \dfrac{\sum_i r_{ij} (V^h_{ij} - mu^h_j)^2}{\sum_i r_{ij}}
+            cost_h = (\beta_u + log \sigma^h_j) * \sum_i r_{ij}
+            a_j = logistic(\lambda * (\beta_a - \sum_h cost_h))
+
+            Input:
+                a_i:      (b, B, 1)
+                R:         (b, B, C)
+                v:         (b, B, C, P*P)
+            Local:
+                cost_h:    (b, C, P*P)
+                R_sum:     (b, C, 1)
+            Output:
+                a_j:     (b, C, 1)
+                mu:        (b, 1, C, P*P)
+                sigma_sq:  (b, 1, C, P*P)
+        """
+        b, B, C, psize = V.size()
+        eps = 1e-8
+        R_a = R * a_i
+        #R = R / (R.sum(dim=2, keepdim=True) + eps)
+        R_sum = R_a.sum(dim=1, keepdim=True)
+        coeff = R_a / (R_sum + eps)
+        coeff = coeff.view(b, B, C, 1)
+        
+        mu = torch.sum(coeff * V, dim=1, keepdim=True)
+        sigma_sq = torch.sum(coeff * (V - mu)**2, dim=1, keepdim=True) + eps
+        
+        R_sum = R_sum.view(b, C, 1)
+        sigma_sq = sigma_sq.view(b, C, psize)
+        sigma = sigma_sq.sqrt()
+        cost_h = (beta_u.view(C, 1) + torch.log(sigma)) * R_sum
+        
+        a_j = self.sigmoid(_lambda*(beta_a - cost_h.sum(dim=2)))
+        sigma_sq = sigma_sq.view(b, 1, C, psize)
+        
+        return a_j, mu, sigma_sq
 
     def m_step(self, a_in, R, v, eps, b, B, C, psize, _lambda):
         """
@@ -106,7 +148,7 @@ class ConvCaps(nn.Module):
             a_j = logistic(\lambda * (\beta_a - \sum_h cost_h))
 
             Input:
-                a_in:      (b, C, 1)
+                a_in:      (b, B, 1)
                 R:         (b, B, C, 1)
                 v:         (b, B, C, P*P)
             Local:
@@ -117,9 +159,9 @@ class ConvCaps(nn.Module):
                 mu:        (b, 1, C, P*P)
                 sigma_sq:  (b, 1, C, P*P)
         """
-        R = R * a_in
-        R = R / (R.sum(dim=2, keepdim=True) + eps)
-        R_sum = R.sum(dim=1, keepdim=True)
+        R_a = R * a_in
+        #R = R / (R.sum(dim=2, keepdim=True) + eps)
+        R_sum = R_a.sum(dim=1, keepdim=True)
         coeff = R / (R_sum + eps)
         coeff = coeff.view(b, B, C, 1)
 
@@ -153,11 +195,8 @@ class ConvCaps(nn.Module):
             Output:
                 r:         (b, B, C, 1)
         """
-        ln_p_j_h = -1. * (v - mu)**2 / (2 * sigma_sq) \
-                    - torch.log(sigma_sq.sqrt()) \
-                    - 0.5*self.ln_2pi
-
-        ln_ap = ln_p_j_h.sum(dim=3) + torch.log(a_out.view(b, 1, C))
+        ln_p_j_h = (-(v - mu)**2 / (self.sqrt_2 * sigma_sq)) - (.5*torch.log(2*math.pi*sigma_sq))
+        ln_ap = ln_p_j_h.sum(3) + torch.log(a_out.view(b, 1, C))
         r = self.softmax(ln_ap)
         return r
 
@@ -184,7 +223,8 @@ class ConvCaps(nn.Module):
         for iter_ in range(self.iters):
             #torch.autograd.set_grad_enabled(iter_ == (self.iters - 1))
             #a_out, mu, sigma_sq = self.m_step(a_in, r, v, eps, b, B, C, psize, self._lambda*(iter_*.01+1))
-            a_out, mu, sigma_sq = self.m_step(a_in, R, v, eps, b, B, C, psize, self._lambda[0]+(self._lambda[1]-self._lambda[0])*r)
+            #a_out, mu, sigma_sq = self.m_step(a_in, R, v, eps, b, B, C, psize, self._lambda[0]+(self._lambda[1]-self._lambda[0])*r)
+            a_out, mu, sigma_sq = self.mmstep(a_in, R, v, self._lambda[0]+(self._lambda[1]-self._lambda[0])*r, self.beta_a, self.beta_u)
             if iter_ < self.iters - 1:
                 R = self.e_step(mu, sigma_sq, a_out, v, eps, b, C)
 
@@ -347,14 +387,14 @@ class MatrixCapsules(nn.Module):
         self.batch_norm_3d_3 = nn.BatchNorm3d(D, affine=True)
         self.batch_norm_2d_3 = nn.BatchNorm2d(D, affine=True)
         
-        self.drop_out_3d_1 = nn.Dropout3d(p=.1)
-        self.drop_out_2d_1 = nn.Dropout2d(p=.1)
+        self.drop_out_3d_1 = nn.Dropout(p=.1)
+        self.drop_out_2d_1 = nn.Dropout(p=.1)
         
-        self.drop_out_3d_2 = nn.Dropout3d(p=.1)
-        self.drop_out_2d_2 = nn.Dropout2d(p=.1)
+        self.drop_out_3d_2 = nn.Dropout(p=.1)
+        self.drop_out_2d_2 = nn.Dropout(p=.1)
         
-        self.drop_out_3d_3 = nn.Dropout3d(p=.1)
-        self.drop_out_2d_3 = nn.Dropout2d(p=.1)
+        self.drop_out_3d_3 = nn.Dropout(p=.1)
+        self.drop_out_2d_3 = nn.Dropout(p=.1)
         
         self.to(device)
         
@@ -365,13 +405,13 @@ class MatrixCapsules(nn.Module):
         x = self.relu1(x)
         x = self.primary_caps(x)
         #x = self.apply_batchnorm(x, self.B, self.batch_norm_2d_1, self.batch_norm_3d_1)
-        #x = self.apply_dropout(x, self.B, self.drop_out_2d_1, self.batch_norm_3d_1)
+        x = self.apply_dropout(x, self.B, self.drop_out_2d_1, self.batch_norm_3d_1)
         x = self.conv_caps1(x, r)
         #x = self.apply_batchnorm(x, self.C, self.batch_norm_2d_2, self.batch_norm_3d_2)
-        #x = self.apply_dropout(x, self.C, self.drop_out_2d_2, self.batch_norm_3d_2)
+        x = self.apply_dropout(x, self.C, self.drop_out_2d_2, self.batch_norm_3d_2)
         x = self.conv_caps2(x, r)
         #x = self.apply_batchnorm(x, self.D, self.batch_norm_2d_3, self.batch_norm_3d_3)
-        #x = self.apply_dropout(x, self.D, self.drop_out_2d_3, self.batch_norm_3d_3)
+        x = self.apply_dropout(x, self.D, self.drop_out_2d_3, self.batch_norm_3d_3)
         x = self.class_caps(x, r)
         return x
     
