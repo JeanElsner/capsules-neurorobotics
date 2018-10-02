@@ -23,7 +23,7 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
-parser.add_argument('--em-iters', type=int, default=3, metavar='N',
+parser.add_argument('--em-iters', type=int, default=2, metavar='N',
                     help='iterations of EM Routing (default: 3)')
 parser.add_argument('--snapshot-dir', type=str, default='./snapshots', metavar='SD',
                     help='where to store the snapshots')
@@ -89,7 +89,7 @@ def test(test_loader, model, criterion, device, chunk=.01):
             if tested/(args.test_batch_size*test_len) >= chunk:
                 break
             data, target = data.to(device), target.to(device)
-            output = model(data, 1)
+            output = model(data, 12/100)
             test_loss += criterion(output, target, r=1).item()
             acc += accuracy(output, target)
             tested += len(data)
@@ -116,7 +116,7 @@ def main():
 
     # model
     if args.model == 'matrix-capsules':
-        A, B, C, D = 64, 8, 16, 32
+        A, B, C, D = 64, 8, 16, 16
         model = MatrixCapsules(A=A, B=B, C=C, D=D, E=num_class, 
                                iters=args.em_iters, device=device,
                                _lambda=[[1e-4, 1e-2], [1e-4, 1e-2], [1e-4, 1e-2]])

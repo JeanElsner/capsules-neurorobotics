@@ -48,7 +48,6 @@ class Capsules(nn.Module):
 
     def forward(self, caps_output):
         caps_output = caps_output.unsqueeze(2)
-        print(caps_output.size(), self.weights.size())
         u_predict = caps_output.matmul(self.weights)
         u_predict = u_predict.view(u_predict.size(0), self.input_caps, self.output_caps, self.output_dim)
         v = self.routing_module(u_predict)
@@ -77,16 +76,14 @@ class VectorCapsules(nn.Module):
     def __init__(self, routing_iterations, num_classes=5):
         super(VectorCapsules, self).__init__()
         self.conv1 = nn.Conv2d(1, 32, kernel_size=5, stride=2)
-        self.primaryCaps = PrimaryCapsules(32, 32, 14, kernel_size=1, stride=2)  # outputs 8*8
-        self.num_primaryCaps = 32 * 14 * 14
+        self.primaryCaps = PrimaryCapsules(32, 32, 14, kernel_size=1, stride=2)
+        self.num_primaryCaps = 32 * 7 * 7
         routing_module = RoutingByAgreement(self.num_primaryCaps, num_classes, routing_iterations)
-        self.digitCaps = Capsules(self.num_primaryCaps, 14, num_classes, 1, routing_module)
+        self.digitCaps = Capsules(self.num_primaryCaps, 14, num_classes, 8, routing_module)
 
     def forward(self, input, r):
         x = self.conv1(input)
         x = F.relu(x)
-        print(x.size())
         x = self.primaryCaps(x)
-        print(x.size())
         x = self.digitCaps(x)
         return x.pow(2).sum(dim=2).sqrt()

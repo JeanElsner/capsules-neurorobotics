@@ -22,18 +22,23 @@ def main(_args):
     if not os.path.exists(os.path.join(save_path, 'train')):
         os.makedirs(os.path.join(save_path, 'train'))
 
-    for image, label, meta in get_smallNORB_train_data(*args, **kwargs):
+    for images, label, meta in get_smallNORB_train_data(*args, **kwargs):
         meta = meta.squeeze()
-        name = '%s_%d_%d_%d_%d.jpg' % (classes[label], meta[0], elevations[meta[1]], meta[2]*10, meta[3])
-        torchvision.utils.save_image(image, os.path.join(save_path, 'train', name))
+        name = '%s_%d_%d_%d_%d' % (classes[label], meta[0], elevations[meta[1]], meta[2]*10, meta[3])
+        images = images.squeeze()
+        torchvision.utils.save_image(images[0], os.path.join(save_path, 'train', name + '_left.jpg'))
+        torchvision.utils.save_image(images[1], os.path.join(save_path, 'train', name + '_right.jpg'))
     
     if not os.path.exists(os.path.join(save_path, 'test')):
         os.makedirs(os.path.join(save_path, 'test'))
     
-    for image, label, meta in get_smallNORB_test_data(*args, **kwargs):
+    for images, label, meta in get_smallNORB_test_data(*args, **kwargs):
         meta = meta.squeeze()
-        name = '%s_%d_%d_%d_%d.jpg' % (classes[label], meta[0], elevations[meta[1]], meta[2]*10, meta[3])
-        torchvision.utils.save_image(image, os.path.join(save_path, 'test', name))
+        name = '%s_%d_%d_%d_%d' % (classes[label], meta[0], elevations[meta[1]], meta[2]*10, meta[3])
+        images = images.squeeze()
+        torchvision.utils.save_image(images[0], os.path.join(save_path, 'test', name + '_left.jpg'))
+        torchvision.utils.save_image(images[1], os.path.join(save_path, 'test', name + '_right.jpg'))
 
 if __name__ == '__main__':
     main(parser.parse_args())
+    
