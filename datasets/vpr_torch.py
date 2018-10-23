@@ -114,7 +114,7 @@ class VPRTorch(data.Dataset):
             torch.save(labels, open(os.path.join(self.root, VPRTorch.test_labels_pickle), 'wb'))
             torch.save(orientation, open(os.path.join(self.root, VPRTorch.test_orientation_pickle), 'wb'))
         else:
-            print('Loading training images from serialized object file.\n')
+            print('Loading test images from serialized object file.\n')
             images = torch.load(open(os.path.join(self.root, VPRTorch.test_images_pickle), 'rb'))
             labels = torch.load(open(os.path.join(self.root, VPRTorch.test_labels_pickle), 'rb'))
             orientation = torch.load(open(os.path.join(self.root, VPRTorch.test_orientation_pickle), 'rb'))

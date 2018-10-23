@@ -176,6 +176,21 @@ def main():
     best_acc = max(best_acc, test(test_loader, model, criterion, device, chunk=args.test_size))
     print('Best test accuracy: {:.6f}'.format(best_acc))
 
+    to_write = params + [best_acc.cpu().numpy()]
+    to_write = [str(x) for x in to_write]
+    result = os.path.join('.', 'results', 'pytorch_train.csv')
+
+    if not os.path.exists(os.path.dirname(result)):
+        os.makedirs(os.path.dirname(result))
+
+    if not os.path.isfile(result):
+        with open(result, 'w') as f:
+            f.write(
+                'mode,batch_size,epochs,lr,weight_decay,seed,em_iters,max_accuracy\n'
+            )
+    with open(result, 'a') as f:
+        f.write(','.join(to_write) + '\n')
+
 
 if __name__ == '__main__':
     main()
