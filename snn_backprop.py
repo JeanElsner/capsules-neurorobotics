@@ -21,22 +21,22 @@ from bindsnet.learning import PostPre
 # Parameters.
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=0)
-parser.add_argument('--n_hidden', type=int, default=1200)
+parser.add_argument('--n_hidden', type=int, default=800)
 parser.add_argument('--n_train', type=int, default=3000)
 parser.add_argument('--n_test', type=int, default=1000)
-parser.add_argument('--time', default=50, type=int)
-#parser.add_argument('--lr', default=0.01, type=float)
-parser.add_argument('--lr', default=0.006, type=float)
+parser.add_argument('--time', default=15, type=int)
+parser.add_argument('--lr', default=0.01, type=float)
+#parser.add_argument('--lr', default=0.006, type=float)
 #parser.add_argument('--lr', default=0.00001, type=float)
 parser.add_argument('--lr_decay', default=.5, type=float)
-parser.add_argument('--decay_memory', default=3, type=int)
-parser.add_argument('--update_interval', default=250, type=int)
-parser.add_argument('--epochs', default=10, type=int)
+parser.add_argument('--decay_memory', default=5, type=int)
+parser.add_argument('--update_interval', default=100, type=int)
+parser.add_argument('--epochs', default=5, type=int)
 parser.add_argument('--plot', dest='plot', action='store_true')
 parser.add_argument('--train', dest='train', action='store_true')
 parser.add_argument('--test', dest='train', action='store_false')
 parser.add_argument('--gpu', dest='gpu', action='store_true')
-parser.set_defaults(plot=False, train=True, gpu=False)
+parser.set_defaults(plot=False, train=False, gpu=False)
 args = parser.parse_args()
 
 seed = args.seed  # random seed
@@ -59,7 +59,6 @@ print()
 print('Command-line argument values:')
 for key, value in args.items():
     print('-', key, ':', value)
-
 print()
 
 data = 'vpr'

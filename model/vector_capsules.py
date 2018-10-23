@@ -16,7 +16,7 @@ class RoutingByAgreement(nn.Module):
     def forward(self, u_predict):
         batch_size, input_caps, output_caps, output_dim = u_predict.size()
 
-        c = F.softmax(self.b)
+        c = F.softmax(self.b, dim=1)
         s = (c.unsqueeze(2) * u_predict).sum(dim=1)
         v = squash(s)
 
@@ -26,7 +26,7 @@ class RoutingByAgreement(nn.Module):
                 v = v.unsqueeze(1)
                 b_batch = b_batch + (u_predict * v).sum(-1)
 
-                c = F.softmax(b_batch.view(-1, output_caps)).view(-1, input_caps, output_caps, 1)
+                c = F.softmax(b_batch.view(-1, output_caps), dim=1).view(-1, input_caps, output_caps, 1)
                 s = (c * u_predict).sum(dim=1)
                 v = squash(s)
         return v

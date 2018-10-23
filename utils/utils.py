@@ -24,9 +24,8 @@ def accuracy(output, target):
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-def snapshot(model, folder, epoch):
-    path = os.path.join(folder, '{}_{}.pth'.format(model.__class__.__name__, epoch))
+def snapshot(path, model):
     if not os.path.exists(os.path.dirname(path)):
         os.makedirs(os.path.dirname(path))
-    print('Saving model to {}'.format(path))
+    print(f'Saving model to {path}')
     torch.save(model.state_dict(), path)

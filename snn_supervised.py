@@ -35,7 +35,7 @@ from datasets import VPR
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--n_neurons', type=int, default=100)
-parser.add_argument('--n_train', type=int, default=50000)
+parser.add_argument('--n_train', type=int, default=10000)
 parser.add_argument('--n_test', type=int, default=10000)
 parser.add_argument('--n_clamp', type=int, default=1)
 parser.add_argument('--exc', type=float, default=22.5)
@@ -45,12 +45,12 @@ parser.add_argument('--dt', type=int, default=1.0)
 parser.add_argument('--intensity', type=float, default=0.25)
 parser.add_argument('--progress_interval', type=int, default=10)
 parser.add_argument('--update_interval', type=int, default=250)
-parser.add_argument('--epochs', type=int, default=2)
+parser.add_argument('--epochs', type=int, default=1)
 parser.add_argument('--train', dest='train', action='store_true')
 parser.add_argument('--test', dest='train', action='store_false')
 parser.add_argument('--plot', dest='plot', action='store_true')
 parser.add_argument('--gpu', dest='gpu', action='store_true')
-parser.set_defaults(plot=True, gpu=False, train=True)
+parser.set_defaults(plot=False, gpu=False, train=True)
 
 args = parser.parse_args()
 
@@ -88,7 +88,7 @@ start_intensity = intensity
 per_class = int(n_neurons / num_classes)
 
 # Build network.
-network = DiehlAndCook2015(n_inpt=im_size**2, n_neurons=n_neurons, exc=exc, inh=inh, dt=dt, nu_pre=0, nu_post=1e-3, norm=78.4)
+network = DiehlAndCook2015(n_inpt=im_size**2, n_neurons=n_neurons, exc=exc, inh=inh, dt=dt, nu_pre=0, nu_post=1e-3, norm=32**2/5)
 
 # Voltage recording for excitatory and inhibitory layers.
 exc_voltage_monitor = Monitor(network.layers['Ae'], ['v'], time=time)
@@ -97,7 +97,7 @@ network.add_monitor(exc_voltage_monitor, name='exc_voltage')
 network.add_monitor(inh_voltage_monitor, name='inh_voltage')
 
 # Load VPR data.
-images, labels = VPR(r'C:\Users\jeane\Desktop\Experimentation\examples\left').get_train()
+images, labels = VPR(r'C:\Users\jeane\Desktop\GitHub\Matrix-Capsules-EM-PyTorch\data\Dataset_lighting4\left').get_train()
 images = images.view(-1, im_size**2)
 images *= intensity
 n_train = min(images.shape[0], n_train)
