@@ -5,13 +5,13 @@ from loss import SpreadLoss
 from utils import count_parameters
 
 
-def load_model(model_name, device_ids, lr, weight_decay, routing_iters):
+def load_model(model_name, device_ids, lr, routing_iters):
     num_class = 5
     if model_name == 'matrix-capsules':
         A, B, C, D = 64, 8, 16, 16
         # A, B, C, D = 32, 32, 32, 32
         model = MatrixCapsules(A=A, B=B, C=C, D=D, E=num_class,
-                               iters=routing_iters, #device=device,
+                               iters=routing_iters,
                                _lambda=[[1e-4, 1e-2], [1e-4, 1e-2], [1e-4, 1e-2]])
     elif model_name == 'cnn':
         model = CNN(num_class)
@@ -22,6 +22,6 @@ def load_model(model_name, device_ids, lr, weight_decay, routing_iters):
     print(f'Network has {count_parameters(model):d} parameters')
 
     criterion = SpreadLoss(num_class=num_class, m_min=0.2, m_max=0.9)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)  # , momentum=.8)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=1)
     return model, criterion, optimizer, scheduler
