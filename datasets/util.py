@@ -56,35 +56,6 @@ class StrideSampler(Sampler):
     def __len__(self):
         return len(self.indices)
 
-
-def get_VPR_train_data(path, batch_size, cuda=True, shuffle=True):
-    kwargs = {'num_workers': 1, 'pin_memory': True} if cuda else {}
-    vpr = VPRTorch(path, train=True, download=True,
-                   transform=transforms.Compose([
-#                       transforms.Resize(48),
-#                       transforms.RandomCrop(32),
-#                       transforms.ColorJitter(brightness=32. / 255, contrast=0.5),
-                       transforms.ToTensor()  # ,
-                       # transforms.Normalize((0, 0, 0), (1, 1, 1))
-                   ]))
-    train_loader = torch.utils.data.DataLoader(
-        vpr, batch_size=batch_size, shuffle=False, **kwargs)
-    return train_loader
-
-
-def get_VPR_test_data(path, batch_size, cuda=True, shuffle=True):
-    kwargs = {'num_workers': 1, 'pin_memory': True} if cuda else {}
-    vpr = VPRTorch(path, train=False, download=True,
-                   transform=transforms.Compose([
- #                      transforms.Resize(48),
- #                      transforms.CenterCrop(32),
-                       transforms.ToTensor()
-                   ]))
-    test_loader = torch.utils.data.DataLoader(
-        vpr, batch_size=batch_size, shuffle=False, **kwargs)
-    return test_loader
-
-
 if __name__ == '__main__':
     vpr = VPRTorch('../data/VPR', train=True, download=True,
                    transform=transforms.Compose([

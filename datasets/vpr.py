@@ -13,7 +13,7 @@ from typing import Tuple, List, Iterable, Any, Dict
 
 class VPR(Dataset):
     """ Visual Pattern Recognition Dataset.
-	"""
+    """
     train_images_pickle: str = 'train_images.pt'
     train_orientation_pickle: str = 'train_orientation.pt'
     train_labels_pickle: str = 'train_labels.pt'

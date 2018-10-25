@@ -47,8 +47,10 @@ class VPRTorch(data.Dataset):
     label_dict: Dict = {'chair': 0, 'cutlery': 1, 'lighter': 2, 'chess': 3, 'cup': 4}
     
     def __init__(self, root, train=True,
-                 transform=None, target_transform=None,
-                 download=False, seed = 0):
+                 transform=None, target_transform=None, seed=0,
+                 elevation: Tuple[int, int] = (0, 8),
+                 azimuth: Tuple[int, int] = (1, 18)
+                 ):
         self.seed = seed
         self.root = os.path.expanduser(root)
         self.transform = transform
@@ -56,15 +58,11 @@ class VPRTorch(data.Dataset):
         self.train: bool = train  # training set or test set
 
         if self.train:
-            self.train_data, self.train_labels, self.train_orientation = self.get_train()
+            self.train_data, self.train_labels, self.train_orientation = self.get_train(elevation, azimuth)
         else:
-            self.test_data, self.test_labels, self.test_orientation = self.get_test()
+            self.test_data, self.test_labels, self.test_orientation = self.get_test(elevation, azimuth)
 
-    def get_train(
-            self,
-            elevation: Tuple[int, int] = (0, 8),
-            azimuth: Tuple[int, int] = (1, 18)
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def get_train(self, elevation, azimuth) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if not os.path.isfile(os.path.join(self.root, VPRTorch.train_images_pickle)) \
                 or not os.path.isfile(os.path.join(self.root, VPRTorch.train_labels_pickle)) \
                 or not os.path.isfile(os.path.join(self.root, VPRTorch.train_orientation_pickle)):
@@ -83,10 +81,8 @@ class VPRTorch(data.Dataset):
             orientation = torch.load(open(os.path.join(self.root, VPRTorch.train_orientation_pickle), 'rb'))
 
         indices = np.all([
-            orientation[:, 0] >= elevation[0],
-            orientation[:, 0] <= elevation[1],
-            orientation[:, 1] >= azimuth[0],
-            orientation[:, 1] <= azimuth[1]], axis=0)
+            [i in elevation for i in orientation[:, 0]],
+            [i in azimuth for i in orientation[:, 1]]], axis=0)
         red_images = torch.Tensor(images[indices])
         red_labels = torch.Tensor(labels[indices])
         red_orientation = torch.Tensor(orientation[indices])
@@ -97,11 +93,7 @@ class VPRTorch(data.Dataset):
 
         return red_images, red_labels, red_orientation
 
-    def get_test(
-            self,
-            elevation: Tuple[int, int] = (0, 8),
-            azimuth: Tuple[int, int] = (1, 18)
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def get_test(self, elevation, azimuth) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if not os.path.isfile(os.path.join(self.root, VPRTorch.test_images_pickle)) \
                 or not os.path.isfile(os.path.join(self.root, VPRTorch.test_labels_pickle)) \
                 or not os.path.isfile(os.path.join(self.root, VPRTorch.test_orientation_pickle)):
@@ -120,10 +112,8 @@ class VPRTorch(data.Dataset):
             orientation = torch.load(open(os.path.join(self.root, VPRTorch.test_orientation_pickle), 'rb'))
 
         indices = np.all([
-            orientation[:, 0] >= elevation[0],
-            orientation[:, 0] <= elevation[1],
-            orientation[:, 1] >= azimuth[0],
-            orientation[:, 1] <= azimuth[1]], axis=0)
+            [i in elevation for i in orientation[:, 0]],
+            [i in azimuth for i in orientation[:, 1]]], axis=0)
         red_images = torch.Tensor(images[indices])
         red_labels = torch.Tensor(labels[indices])
         red_orientation = torch.Tensor(orientation[indices])

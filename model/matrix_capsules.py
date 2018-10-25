@@ -67,8 +67,6 @@ class ConvCaps(nn.Module):
     def __init__(self, B=32, C=32, K=3, P=4, stride=2, iters=3,
                  coor_add=False, w_shared=False, device='cuda', _lambda=[]):
         super(ConvCaps, self).__init__()
-        # TODO: lambda scheduler
-        # Note that .contiguous() for 3+ dimensional tensors is very slow
         self.B = B
         self.C = C
         self.K = K
@@ -83,9 +81,6 @@ class ConvCaps(nn.Module):
         self._lambda = torch.tensor(_lambda).to(device)
         self.ln_2pi = math.log(2*math.pi)
         self.sqrt_2 = math.sqrt(2)
-        # params
-        # Note that \beta_u and \beta_a are per capsule type,
-        # which are stated at https://openreview.net/forum?id=HJWLfGWRb&noteId=rJUY2VdbM
         self.beta_u = nn.Parameter(torch.ones(C))
         self.beta_a = nn.Parameter(torch.ones(C))
         # Sparsifying the transformation matrices
@@ -93,7 +88,7 @@ class ConvCaps(nn.Module):
         p = torch.full_like(randn, .5).bernoulli()
         self.weights = nn.Parameter(randn*p/(P*P))
         
-        # op
+        # operators
         self.sigmoid = nn.Sigmoid()
         self.softmax = nn.Softmax(dim=2)
         
