@@ -1,140 +1,139 @@
-from __future__ import print_function
 import argparse
 import os
-import time
+import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from torchvision import datasets, transforms
-from train import get_smallNORB_test_data, get_smallNORB_train_data
-from model import MatrixCapsules, CNN, VectorCapsules
-from loss import SpreadLoss
+from datasets import VPRTorch
+from model import load_model
+from utils import snapshot, append_to_csv, path_to_save_string
+from torchvision import transforms
+from training import test, train
 
-# Training settings
-parser = argparse.ArgumentParser(description='PyTorch Matrix-Capsules-EM')
-parser.add_argument('--model', type=str, default='matrix-capsules', metavar='M',
+parser = argparse.ArgumentParser(description='Visual Pattern Recognition')
+parser.add_argument('--model', type=str, default='vector-capsules', metavar='M',
                     help='Neural network model')
+parser.add_argument('--batch-size', type=int, default=32, metavar='N',
+                    help='input batch size for training')
 parser.add_argument('--test-batch-size', type=int, default=256, metavar='N',
-                    help='input batch size for testing (default: 56)')
+                    help='input batch size for testing')
+parser.add_argument('--test-interval', type=int, default=1, metavar='N',
+                    help='interval in epochs to test')
 parser.add_argument('--test-size', type=float, default=1, metavar='N',
-                    help='percentage of the test set used for calculating accuracy (default: 0.05)')
-parser.add_argument('--no-cuda', action='store_true', default=False,
-                    help='disables CUDA training')
+                    help='percentage of the test set used for calculating accuracy during training')
+parser.add_argument('--epochs', type=int, default=10, metavar='N',
+                    help='number of epochs to train')
+parser.add_argument('--lr', type=float, default=1e-4, metavar='LR',
+                    help='learning rate')
+parser.add_argument('--weight-decay', type=float, default=0, metavar='WD',
+                    help='weight decay')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
-                    help='random seed (default: 1)')
-parser.add_argument('--em-iters', type=int, default=2, metavar='N',
-                    help='iterations of EM Routing (default: 3)')
-parser.add_argument('--snapshot-dir', type=str, default='./snapshots', metavar='SD',
-                    help='where to store the snapshots')
-parser.add_argument('--data-dir', type=str, default='./data', metavar='DD',
-                    help='where to store the datasets')
-parser.add_argument('--dataset', type=str, default='smallNORB', metavar='D',
-                    help='dataset for training(mnist, smallNORB)')
+                    help='random seed')
+parser.add_argument('--log-interval', type=int, default=10, metavar='N',
+                    help='how many mini-batches to wait before logging training status')
+parser.add_argument('--routing-iters', type=int, default=2, metavar='N',
+                    help='iterations of dynamic routing')
+parser.add_argument('--dataset', type=str, default=r'./data/Dataset_lighting3/left', metavar='DD',
+                    help='path to the dataset')
 parser.add_argument('--inv-temp', type=float, default=1e-3, metavar='N',
                     help='Inverse temperature parameter for the EM algorithm')
-parser.add_argument('--snapshot', type=str, default='', metavar='SNP',
-                    help='Use pretrained network from snapshot')
+parser.add_argument('--device-ids', nargs='+', default=[0], type=int)
+parser.add_argument('--viewpoint-modulo', type=int, default=1)
 
-def get_setting(args):
-    kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
-    path = os.path.join(args.data_dir, args.dataset)
-    if args.dataset == 'mnist':
-        num_class = 10
-        test_loader = torch.utils.data.DataLoader(
-            datasets.MNIST(path, train=False,
-                           transform=transforms.Compose([
-                               transforms.ToTensor(),
-                               transforms.Normalize((0.1307,), (0.3081,))
-                           ])),
-            batch_size=args.test_batch_size, shuffle=True, **kwargs)
-    elif args.dataset == 'smallNORB':
-        num_class = 5
-        test_loader = get_smallNORB_test_data(path, args.test_batch_size, cuda=args.cuda, shuffle=True)
-    else:
-        raise NameError('Undefined dataset {}'.format(args.dataset))
-    return num_class, test_loader
 
-def accuracy(output, target):
-    return (target==output.max(1)[1]).sum().float()*100/len(target)
+def get_vpr_train_data(path, batch_size, azimuth, elevation):
+    kwargs = {'num_workers': 1, 'pin_memory': True}
+    vpr = VPRTorch(path, train=True,
+                   transform=transforms.Compose([
+                       #                       transforms.Resize(48),
+                       #                       transforms.RandomCrop(32),
+                       #                       transforms.ColorJitter(brightness=32. / 255, contrast=0.5),
+                       transforms.ToTensor()  # ,
+                       # transforms.Normalize((0, 0, 0), (1, 1, 1))
+                   ]),
+                   azimuth=azimuth, elevation=elevation)
+    train_loader = torch.utils.data.DataLoader(
+        vpr, batch_size=batch_size, shuffle=False, **kwargs)
+    return train_loader
 
-def count_parameters(model):
-    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-class AverageMeter(object):
-    """Computes and stores the average and current value"""
-    def __init__(self):
-        self.reset()
+def get_vpr_test_data(path, batch_size, azimuth, elevation):
+    kwargs = {'num_workers': 1, 'pin_memory': True}
+    vpr = VPRTorch(path, train=False,
+                   transform=transforms.Compose([
+                       #                      transforms.Resize(48),
+                       #                      transforms.CenterCrop(32),
+                       transforms.ToTensor()
+                   ]),
+                   azimuth=azimuth, elevation=elevation)
+    test_loader = torch.utils.data.DataLoader(
+        vpr, batch_size=batch_size, shuffle=False, **kwargs)
+    return test_loader
 
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
 
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
+def get_settings(path, batch_size, test_batch_size, viewpoint_modulo):
+    num_class = 5
+    azimuth = np.arange(1, 19, viewpoint_modulo)
+    elevation = np.arange(0, 9, viewpoint_modulo)
+    train_loader = get_vpr_train_data(path, batch_size, azimuth, elevation)
+    test_loader = get_vpr_test_data(path, test_batch_size, np.arange(1, 19), np.arange(0, 9))
+    print(f'{len(train_loader.dataset)} training images, {len(test_loader.dataset)} test images')
+    return num_class, train_loader, test_loader
 
-def test(test_loader, model, criterion, device, chunk=.01):
-    model.eval()
-    test_loss = 0
-    acc = 0
-    test_len = len(test_loader)
-    tested = 0
-    with torch.no_grad():
-        for data, target, _ in test_loader:
-            if tested/(args.test_batch_size*test_len) >= chunk:
-                break
-            data, target = data.to(device), target.to(device)
-            output = model(data, 12/100)
-            test_loss += criterion(output, target, r=1).item()
-            acc += accuracy(output, target)
-            tested += len(data)
-
-    test_loss /= test_len
-    acc /= (test_len*chunk)
-    print('\nTest set: Average loss: {:.6f}, Accuracy: {:.6f} \n'.format(
-        test_loss, acc))
-    return acc
 
 def main():
-    global args, best_prec1
+    global args
     args = parser.parse_args()
-    args.cuda = not args.no_cuda and torch.cuda.is_available()
 
-    #torch.manual_seed(args.seed)
-    #if args.cuda:
-    #    torch.cuda.manual_seed(args.seed)
+    print()
+    print('Command-line argument values:')
+    for key, value in vars(args).items():
+        print('-', key, ':', value)
+    print()
 
-    device = torch.device("cuda" if args.cuda else "cpu")
-    
+    params = [
+        args.model, path_to_save_string(args.dataset), args.viewpoint_modulo, args.batch_size,
+        args.epochs, args.lr, args.weight_decay, args.seed, args.routing_iters
+    ]
+    model_name = '_'.join([str(x) for x in params]) + '.pth'
+    header = 'model,dataset,viewpoint_modulo,batch_size,epochs,lr,weight_decay,seed,em_iters,accuracy'
+    path = os.path.join('.', 'snapshots', model_name)
+
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed(args.seed)
+
+    model, criterion, optimizer, scheduler = load_model(args.model, device_ids=args.device_ids, lr=args.lr, weight_decay=args.weight_decay, routing_iters=args.routing_iters)
+
     # datasets
-    num_class, test_loader = get_setting(args)
+    num_class, train_loader, test_loader = get_settings(
+        args.dataset, args.batch_size, args.test_batch_size, args.viewpoint_modulo)
 
-    # model
-    if args.model == 'matrix-capsules':
-        A, B, C, D = 64, 8, 16, 16
-        model = MatrixCapsules(A=A, B=B, C=C, D=D, E=num_class, 
-                               iters=args.em_iters, device=device,
-                               _lambda=[[1e-4, 1e-2], [1e-4, 1e-2], [1e-4, 1e-2]])
-    elif args.model == 'cnn':
-        model = CNN(num_class)
-        model.to(device)
-    elif args.model == 'vector-capsules':
-        model = VectorCapsules(3, num_classes=num_class)
-        model.to(device)
-    print('%d trained parameters' % (count_parameters(model)))
+    best_acc = 0
 
-    if args.snapshot:
-        print('Pretrained model from snapshot %s' % (args.snapshot))
-        model.load_state_dict(torch.load(args.snapshot))
+    if args.append:
+        model.load_state_dict(torch.load(path))
 
-    criterion = SpreadLoss(num_class=num_class, m_min=0.2, m_max=0.9, device=device)
-    acc = test(test_loader, model, criterion, device, chunk=args.test_size)
-    print('Test set accuracy: {:.6f}'.format(acc))
+    try:
+        for epoch in range(1, args.epochs + 1):
+            print()
+            acc = train(train_loader, model, criterion, optimizer, epoch, epochs=args.epochs, log_interval=args.log_interval)
+            scheduler.step(acc)
+            print('Epoch accuracy was %.1f%%. Learning rate is %.9f.' %
+                  (acc, optimizer.state_dict()['param_groups'][0]['lr']))
+            if epoch % args.test_interval == 0:
+                test_acc = test(test_loader, model, criterion, chunk=args.test_size)
+                if test_acc > best_acc:
+                    best_acc = test_acc
+    except KeyboardInterrupt:
+        print('Cancelled training after %d epochs' % (epoch - 1))
+        args.epochs = epoch - 1
+    snapshot(path, model)
+    acc = test(test_loader, model, criterion, chunk=1)
+    print(f'Accuracy: {acc:.2f}% (best: {best_acc:.2f}%)')
+
+    to_write = params + [acc.cpu().numpy()]
+    result = os.path.join('.', 'results', 'pytorch_test.csv')
+    append_to_csv(result, to_write, header=header)
+
 
 if __name__ == '__main__':
     main()

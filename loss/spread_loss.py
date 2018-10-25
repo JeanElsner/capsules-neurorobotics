@@ -3,19 +3,18 @@ from torch.nn.modules.loss import _Loss
 
 class SpreadLoss(_Loss):
 
-    def __init__(self, m_min=0.2, m_max=0.9, num_class=10, device='cuda'):
+    def __init__(self, m_min=0.2, m_max=0.9, num_class=10):
         super(SpreadLoss, self).__init__()
         self.m_min = m_min
         self.m_max = m_max
         self.num_class = num_class
-        self.device = device
 
     def forward(self, x, target, r):
         b, E = x.shape
         assert E == self.num_class
         margin = self.m_min + (self.m_max - self.m_min)*r
 
-        at = torch.zeros(b).to(self.device)
+        at = torch.zeros(b).cuda()
         for i, lb in enumerate(target):
             at[i] = x[i][lb]
         at = at.view(b, 1).repeat(1, E)

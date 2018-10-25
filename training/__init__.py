@@ -3,7 +3,7 @@ import time
 from utils import AverageMeter, accuracy_from_final_layer
 
 
-def train(train_loader, model, criterion, optimizer, epoch, device, epochs=10, log_interval=1):
+def train(train_loader, model, criterion, optimizer, epoch, epochs=10, log_interval=1):
     batch_time = AverageMeter()
 
     model.train()
@@ -15,7 +15,7 @@ def train(train_loader, model, criterion, optimizer, epoch, device, epochs=10, l
 
     for batch_idx, (data, target) in enumerate(train_loader):
         r = (1. * batch_idx + (epoch - 1) * train_len) / (epochs * train_len)
-        data, target = data.to(device), target.to(device)
+        data, target = data.cuda(), target.cuda()
         optimizer.zero_grad()
         output = model(data, r)
         loss = criterion(output, target, r)
@@ -42,7 +42,7 @@ def train(train_loader, model, criterion, optimizer, epoch, device, epochs=10, l
     return epoch_acc / len(train_loader)
 
 
-def test(test_loader, model, criterion, device, chunk=.01):
+def test(test_loader, model, criterion, chunk=.01):
     model.eval()
     test_loss = 0
     acc = 0
@@ -52,7 +52,7 @@ def test(test_loader, model, criterion, device, chunk=.01):
         for data, target in test_loader:
             if tested / (test_loader.batch_size * test_len) >= chunk:
                 break
-            data, target = data.to(device), target.to(device)
+            data, target = data.cuda(), target.cuda()
             output = model(data, 1)
             test_loss += criterion(output, target, r=1).item()
             acc += accuracy_from_final_layer(output, target)
