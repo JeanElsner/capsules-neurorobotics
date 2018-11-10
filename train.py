@@ -58,7 +58,7 @@ def main():
             print('Epoch accuracy was %.1f%%. Learning rate is %.9f.' %
                   (acc, optimizer.state_dict()['param_groups'][0]['lr']))
             if epoch % args.test_interval == 0:
-                test_acc, __, __ = test(test_loader, model, criterion, chunk=args.test_size)
+                test_acc, __, __, __ = test(test_loader, model, criterion, chunk=args.test_size)
                 test_accuracies.append(test_acc)
                 if test_acc > best_acc:
                     best_acc = test_acc

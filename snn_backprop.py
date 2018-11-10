@@ -33,6 +33,7 @@ parser.add_argument('--test', dest='train', action='store_false')
 parser.add_argument('--gpu', dest='gpu', action='store_true')
 parser.add_argument('--dataset', type=str, default='./data/Dataset_lighting3/left')
 parser.add_argument('--test-dataset', type=str, default='./data/Dataset_lighting4/left')
+parser.add_argument('--learn_curve', type=str, default='')
 parser.set_defaults(plot=False, train=True, gpu=False)
 args = parser.parse_args()
 
@@ -47,6 +48,7 @@ train = args.train
 gpu = args.gpu
 epochs = args.epochs
 decay_memory = args.decay_memory
+learn_curve = args.learn_curve
 
 args = vars(args)
 
@@ -144,7 +146,8 @@ if train:
 else:
     epochs = 1
     _images, _labels = dataset.get_test()
-
+if learn_curve != '':
+    test_images, test_labels = dataset.get_test()
 n_examples = _images.shape[0]
 
 # Run training.
@@ -152,6 +155,7 @@ start = beginning = t()
 mean_acc = []
 mean_best = -np.inf
 last_improv = 0
+test_accuracies = []
 for epoch in range(epochs):
     images, labels = _images[:n_examples], _labels[:n_examples]
     images, labels = iter(images.view(-1, 32 ** 2) / 255), iter(labels)
@@ -266,7 +270,25 @@ for epoch in range(epochs):
 
         network.reset_()  # Reset state variables.
 
-accuracies.append(correct.mean() * 100)
+    if learn_curve != '':
+        images, labels = test_images[:n_examples], test_labels[:n_examples]
+        images, labels = iter(images.view(-1, 32 ** 2) / 255), iter(labels)
+        correct = []
+        for i, (image, label) in enumerate(zip(images, labels)):
+            label = torch.Tensor([label]).long()
+            inpts = {
+                'X': image.repeat(time, 1), 'Y_b': torch.ones(time, 1), 'Z_b': torch.ones(time, 1)
+            }
+            network.run(inpts=inpts, time=time)
+            spikes = {l: network.monitors[l].get('s') for l in network.layers if not '_b' in l}
+            summed_inputs = {l: network.layers[l].summed / time for l in network.layers}
+            output = summed_inputs['Z'].softmax(0).view(1, -1)
+            predicted = output.argmax(1).item()
+            correct.append(int(predicted == label[0].item()))
+            network.reset_()
+        test_accuracies.append(np.mean(correct))
+
+#accuracies.append(correct.mean() * 100)
 
 if train:
     lr *= lr_decay
@@ -325,5 +347,8 @@ confusion = confusion_matrix(ground_truth, predictions)
 to_write = ['train'] + params if train else ['test'] + test_params
 f = '_'.join([str(x) for x in to_write]) + '.pt'
 torch.save(confusion, os.path.join(confusion_path, f))
+
+if learn_curve != '':
+    torch.save(test_accuracies, args.learn_curve)
 
 print()

@@ -46,12 +46,14 @@ def test(test_loader, model, criterion, chunk=.01):
     tested = 0
     labels = []
     predictions = []
+    logits = torch.tensor([]).cuda()
     with torch.no_grad():
         for data, target in test_loader:
             if tested / (test_loader.batch_size * test_len) >= chunk:
                 break
             data, target = data.cuda(), target.cuda()
             output = model(data, 1)
+            logits = torch.cat((logits, output))
             test_loss += criterion(output, target, r=1).item()
             acc += accuracy_from_final_layer(output, target)
             tested += len(data)
@@ -61,4 +63,4 @@ def test(test_loader, model, criterion, chunk=.01):
     acc /= (test_len * chunk)
     print(f'Test set: Average loss: {test_loss:.6f}, Accuracy: {acc:.6f}')
     print()
-    return acc, predictions, labels, output
+    return acc, predictions, labels, logits
