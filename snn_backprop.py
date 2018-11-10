@@ -349,6 +349,6 @@ f = '_'.join([str(x) for x in to_write]) + '.pt'
 torch.save(confusion, os.path.join(confusion_path, f))
 
 if learn_curve != '':
-    torch.save(test_accuracies, args.learn_curve)
+    torch.save(test_accuracies, learn_curve)
 
 print()
