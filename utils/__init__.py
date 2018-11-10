@@ -1,25 +1,30 @@
 import os
 import torch
 import re
+import time
+import gc
+from functools import reduce
 
 
 class AverageMeter(object):
-    """Computes and stores the average and current value"""
+
+    start_time = 0
+    last_update = 0
+    intervals: list = []
 
     def __init__(self):
-        self.reset()
+        self.start_time = time.time()
+        self.last_update = self.start_time
 
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
+    def update(self):
+        self.intervals.append(time.time() - self.last_update)
+        self.last_update = time.time()
 
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
+    def get_average(self):
+        return sum(self.intervals)/len(self.intervals)
+
+    def get_total(self):
+        return time.time() - self.start_time
 
 
 def accuracy_from_final_layer(output, target):
@@ -58,6 +63,10 @@ def append_to_csv(path, to_write, header=''):
         f.write(','.join(to_write) + '\n')
 
 
+def gpu_memory_usage():
+    return torch.cuda.max_memory_allocated() / 1024 ** 2
+
+
 def add_training_arguments(parser):
     parser.add_argument('--model', type=str, default='vector-capsules')
     parser.add_argument('--batch-size', type=int, default=32)
@@ -75,3 +84,4 @@ def add_training_arguments(parser):
     parser.add_argument('--device-ids', nargs='+', default=[0], type=int)
     parser.add_argument('--append', default=False, action='store_true')
     parser.add_argument('--viewpoint-modulo', type=int, default=1)
+    parser.add_argument('--learn-curve', type=str, default='')

@@ -1,6 +1,7 @@
 import torch
 from torch.nn.modules.loss import _Loss
 
+
 class SpreadLoss(_Loss):
 
     def __init__(self, m_min=0.2, m_max=0.9, num_class=10):
@@ -18,7 +19,6 @@ class SpreadLoss(_Loss):
         for i, lb in enumerate(target):
             at[i] = x[i][lb]
         at = at.view(b, 1).repeat(1, E)
-
         zeros = x.new_zeros(x.shape)
         loss = torch.max(margin - (at - x), zeros)
         loss = loss**2

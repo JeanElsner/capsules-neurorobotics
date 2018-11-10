@@ -34,15 +34,15 @@ from datasets import VPR
 #     300        2   1e-4      26.58
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=0)
-parser.add_argument('--n_neurons', type=int, default=100)
+parser.add_argument('--n_neurons', type=int, default=800)
 parser.add_argument('--n_train', type=int, default=10000)
 parser.add_argument('--n_test', type=int, default=10000)
 parser.add_argument('--n_clamp', type=int, default=1)
 parser.add_argument('--exc', type=float, default=22.5)
 parser.add_argument('--inh', type=float, default=22.5)
-parser.add_argument('--time', type=int, default=50)
+parser.add_argument('--time', type=int, default=15)
 parser.add_argument('--dt', type=int, default=1.0)
-parser.add_argument('--intensity', type=float, default=0.25)
+parser.add_argument('--intensity', type=float, default=1)
 parser.add_argument('--progress_interval', type=int, default=10)
 parser.add_argument('--update_interval', type=int, default=250)
 parser.add_argument('--epochs', type=int, default=1)
@@ -88,7 +88,7 @@ start_intensity = intensity
 per_class = int(n_neurons / num_classes)
 
 # Build network.
-network = DiehlAndCook2015(n_inpt=im_size**2, n_neurons=n_neurons, exc=exc, inh=inh, dt=dt, nu_pre=0, nu_post=1e-3, norm=32**2/5)
+network = DiehlAndCook2015(n_inpt=im_size**2, n_neurons=n_neurons, exc=exc, inh=inh, dt=dt, nu_pre=0, nu_post=1e-2, norm=32**2/5)
 
 # Voltage recording for excitatory and inhibitory layers.
 exc_voltage_monitor = Monitor(network.layers['Ae'], ['v'], time=time)
@@ -161,12 +161,11 @@ for epoch in range(epochs):
 
         c = np.random.choice(int(n_neurons/num_classes), size=1, replace=False)
         c = int(n_neurons/num_classes) * labels[i].long() + torch.Tensor(c).long()
-        clamp = torch.zeros(time, n_neurons, dtype=torch.uint8)
-        clamp[:, c] = 1
-        clamp_v = torch.zeros(time, n_neurons, dtype=torch.float)
-        clamp_v[:, c] = network.layers['Ae'].thresh + network.layers['Ae'].theta[c] + num_classes
+        clamp = torch.zeros(n_neurons, dtype=torch.uint8)
+        clamp[c] = 1
+        clamp_v = torch.zeros(n_neurons, dtype=torch.float)
+        clamp_v[c] = network.layers['Ae'].thresh + network.layers['Ae'].theta[c] + num_classes
         network.run(inpts=inpts, time=time, clamp={'Ae': clamp}, clamp_v={'Ae': clamp_v})
-        #network.run(inpts=inpts, time=time)
 
         # Get voltage recording.
         exc_voltages = exc_voltage_monitor.get('v')

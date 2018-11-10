@@ -6,8 +6,7 @@ import matplotlib.pyplot as plt
 
 from time import time as t
 from sklearn.metrics import confusion_matrix
-
-from bindsnet.datasets import MNIST
+from utils import AverageMeter
 from bindsnet.network import Network, load_network
 from bindsnet.utils import get_square_weights
 from bindsnet.network.monitors import Monitor
@@ -21,35 +20,31 @@ from bindsnet.learning import PostPre
 # Parameters.
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=0)
-parser.add_argument('--n_hidden', type=int, default=800)
-parser.add_argument('--n_train', type=int, default=3000)
-parser.add_argument('--n_test', type=int, default=1000)
+parser.add_argument('--n_hidden', type=int, default=150)
 parser.add_argument('--time', default=15, type=int)
-parser.add_argument('--lr', default=0.01, type=float)
-#parser.add_argument('--lr', default=0.006, type=float)
-#parser.add_argument('--lr', default=0.00001, type=float)
-parser.add_argument('--lr_decay', default=.5, type=float)
-parser.add_argument('--decay_memory', default=5, type=int)
+parser.add_argument('--lr', default=0.005, type=float)
+parser.add_argument('--lr_decay', default=.7, type=float)
+parser.add_argument('--decay_memory', default=3, type=int)
 parser.add_argument('--update_interval', default=100, type=int)
 parser.add_argument('--epochs', default=5, type=int)
 parser.add_argument('--plot', dest='plot', action='store_true')
 parser.add_argument('--train', dest='train', action='store_true')
 parser.add_argument('--test', dest='train', action='store_false')
 parser.add_argument('--gpu', dest='gpu', action='store_true')
+parser.add_argument('--dataset', type=str, default='./data/Dataset_lighting3/left')
+parser.add_argument('--test-dataset', type=str, default='./data/Dataset_lighting4/left')
 parser.set_defaults(plot=False, train=True, gpu=False)
 args = parser.parse_args()
 
-seed = args.seed  # random seed
-n_hidden = args.n_hidden  # no. of hidden layer neurons
-n_train = args.n_train  # no. of training samples
-n_test = args.n_test  # no. of test samples
-time = args.time  # simulation time
-lr = args.lr  # learning rate
-lr_decay = args.lr_decay  # learning rate decay
-update_interval = args.update_interval  # no. examples between evaluation
-plot = args.plot  # visualize spikes + connection weights
-train = args.train  # train or test mode
-gpu = args.gpu  # whether to use gpu or cpu tensors
+seed = args.seed
+n_hidden = args.n_hidden
+time = args.time
+lr = args.lr
+lr_decay = args.lr_decay
+update_interval = args.update_interval
+plot = args.plot
+train = args.train
+gpu = args.gpu
 epochs = args.epochs
 decay_memory = args.decay_memory
 
@@ -64,18 +59,14 @@ print()
 data = 'vpr'
 model = 'two_layer_backprop'
 
-assert n_train % update_interval == 0 and n_test % update_interval == 0, \
-                        'No. examples must be divisible by update_interval'
-
 params = [
-    seed, n_hidden, n_train, time, lr, lr_decay, update_interval
+    seed, n_hidden, epochs, time, lr, lr_decay, decay_memory, update_interval
 ]
-
 model_name = '_'.join([str(x) for x in params])
 
 if not train:
     test_params = [
-        seed, n_hidden, n_train, n_test, time, lr, lr_decay, update_interval
+        seed, n_hidden, epochs, time, lr, lr_decay, decay_memory, update_interval
     ]
 
 np.random.seed(seed)
@@ -100,7 +91,6 @@ for path in [params_path, curves_path, results_path, confusion_path]:
 
 criterion = torch.nn.CrossEntropyLoss()  # Loss function on output firing rates.
 sqrt = int(np.ceil(np.sqrt(n_hidden)))  # Ceiling(square root(no. hidden neurons)).
-n_examples = n_train if train else n_test
 
 if train:
     # Network building.
@@ -119,7 +109,7 @@ if train:
     network.add_layer(output_bias, name='Z_b')
 
     recurrent_connection = Connection(source=hidden_layer, target=hidden_layer, update_rule=PostPre,
-                                #norm=78.4,
+                                norm=32**2/5,
                                 nu_pre=1e-4,
                                 nu_post=1e-2,
                                 wmax=1.0, wmin=-1)
@@ -140,6 +130,11 @@ if train:
         network.add_monitor(m, name=l)
 else:
     network = load_network(os.path.join(params_path, model_name + '.pt'))
+
+num_params = 0
+for __, c in network.connections.items():
+    num_params += c.w.numel()
+print(f'Network has {num_params} parameters.')
 
 # Load MNIST data.
 dataset = VPR(data_path)
@@ -168,6 +163,7 @@ for epoch in range(epochs):
     spike_ims, spike_axes, weights1_im, weights2_im = None, None, None, None
     losses = torch.zeros(update_interval)
     correct = torch.zeros(update_interval)
+    meter = AverageMeter()
     for i, (image, label) in enumerate(zip(images, labels)):
         label = torch.Tensor([label]).long()
 
@@ -235,14 +231,14 @@ for epoch in range(epochs):
                     # Save network to disk.
                     network.save(os.path.join(params_path, model_name + '.pt'))
                     best = accuracies[-1]
-
+            meter.update()
             print()
-            print(f'Epoch {epoch+1} of {epochs}')
-            print(f'Progress: {i} / {n_examples} ({t() - start:.3f} seconds)')
-            print(f'Average cross-entropy loss: {losses.mean():.3f}')
-            print(f'Last interval accuracy: {accuracies[-1]:.3f}')
-            print(f'Average accuracy: {mean_acc[-1]:.3f}')
-
+            print(f'Epoch {epoch+1} of {epochs}\t'
+                  f'Progress: {i} / {n_examples}\t'
+                  # f'Average cross-entropy loss: {losses.mean():.3f}'
+                  f'Last interval accuracy: {accuracies[-1]:.3f}\t'
+                  f'Average accuracy: {mean_acc[-1]:.3f}\t'
+                  f'Time: {meter.get_total():.0f}s ({meter.get_average():.3f}s)\t')
             if train:
                 print(f'Best average accuracy: {mean_best:.4f}')
                 print(f'Current learning rate: {lr:.5f}')
@@ -313,11 +309,11 @@ if not os.path.isfile(os.path.join(results_path, name)):
     with open(os.path.join(results_path, name), 'w') as f:
         if train:
             f.write(
-                'seed,n_hidden,n_train,time,lr,lr_decay,update_interval,mean_accuracy,max_accuracy\n'
+                'seed,n_hidden,epochs,time,lr,lr_decay,decay_memory,update_interval,mean_accuracy,max_accuracy\n'
             )
         else:
             f.write(
-                'seed,n_hidden,n_train,n_test,time,lr,lr_decay,update_interval,mean_accuracy,max_accuracy\n'
+                'seed,n_hidden,epochs,time,lr,lr_decay,decay_memory,update_interval,mean_accuracy,max_accuracy\n'
             )
 
 with open(os.path.join(results_path, name), 'a') as f:
