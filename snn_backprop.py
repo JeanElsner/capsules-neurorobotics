@@ -286,7 +286,7 @@ for epoch in range(epochs):
             predicted = output.argmax(1).item()
             correct.append(int(predicted == label[0].item()))
             network.reset_()
-        test_accuracies.append(np.mean(correct))
+        test_accuracies.append(np.mean(correct)*100)
 
 #accuracies.append(correct.mean() * 100)
 
