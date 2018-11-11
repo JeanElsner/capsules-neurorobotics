@@ -31,7 +31,7 @@ parser.add_argument('--plot', dest='plot', action='store_true')
 parser.add_argument('--train', dest='train', action='store_true')
 parser.add_argument('--test', dest='train', action='store_false')
 parser.add_argument('--gpu', dest='gpu', action='store_true')
-parser.add_argument('--dataset', type=str, default='./data/Dataset_lighting3/left')
+parser.add_argument('--dataset', type=str, default='./data/Dataset_lighting4/left')
 parser.add_argument('--test-dataset', type=str, default='./data/Dataset_lighting4/left')
 parser.add_argument('--learn_curve', type=str, default='')
 parser.set_defaults(plot=False, train=True, gpu=False)
@@ -49,6 +49,7 @@ gpu = args.gpu
 epochs = args.epochs
 decay_memory = args.decay_memory
 learn_curve = args.learn_curve
+dataset = args.dataset
 
 args = vars(args)
 
@@ -287,6 +288,7 @@ for epoch in range(epochs):
             correct.append(int(predicted == label[0].item()))
             network.reset_()
         test_accuracies.append(np.mean(correct)*100)
+        print(f'Training set: {np.mean(correct)*100:.2f}%')
 
 #accuracies.append(correct.mean() * 100)
 
