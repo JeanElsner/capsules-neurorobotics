@@ -231,6 +231,13 @@ for epoch in range(epochs):
                             last_improv -= 1
                 if mean_acc[-1] > mean_best:
                     mean_best = mean_acc[-1]
+                if accuracies[-1] > best:
+                    params = [
+                        seed, n_hidden, epoch + 1, time, __lr, lr_decay, decay_memory, update_interval
+                    ]
+                    model_name = '_'.join([str(x) for x in params])
+                    network.save(os.path.join(params_path, model_name + '.pt'))
+                    print(f'Saving model {os.path.join(params_path, model_name + ".pt")}')
             meter.update()
             print()
             print(f'Epoch {epoch+1} of {epochs}\t'
@@ -269,8 +276,9 @@ for epoch in range(epochs):
         seed, n_hidden, epoch + 1, time, __lr, lr_decay, decay_memory, update_interval
     ]
     model_name = '_'.join([str(x) for x in params])
-    network.save(os.path.join(params_path, model_name + '.pt'))
-    print(f'Saving model {os.path.join(params_path, model_name + ".pt")}')
+    if not os.path.isfile(os.path.join(params_path, model_name + '.pt')):
+        network.save(os.path.join(params_path, model_name + '.pt'))
+        print(f'Saving model {os.path.join(params_path, model_name + ".pt")}')
 
 print()
 print(f'Progress: {n_examples} / {n_examples} ({t() - start:.3f} seconds)')
