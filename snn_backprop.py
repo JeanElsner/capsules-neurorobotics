@@ -41,6 +41,7 @@ seed = args.seed
 n_hidden = args.n_hidden
 time = args.time
 lr = args.lr
+__lr = lr
 lr_decay = args.lr_decay
 update_interval = args.update_interval
 plot = args.plot
@@ -265,11 +266,11 @@ for epoch in range(epochs):
         network.reset_()  # Reset state variables.
 
     params = [
-        seed, n_hidden, epoch + 1, time, lr, lr_decay, decay_memory, update_interval
+        seed, n_hidden, epoch + 1, time, __lr, lr_decay, decay_memory, update_interval
     ]
     model_name = '_'.join([str(x) for x in params])
     network.save(os.path.join(params_path, model_name + '.pt'))
-    print(f'Saving model {model_name}')
+    print(f'Saving model {os.path.join(params_path, model_name + ".pt")}')
 
 print()
 print(f'Progress: {n_examples} / {n_examples} ({t() - start:.3f} seconds)')
