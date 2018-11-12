@@ -269,6 +269,7 @@ for epoch in range(epochs):
     ]
     model_name = '_'.join([str(x) for x in params])
     network.save(os.path.join(params_path, model_name + '.pt'))
+    print(f'Saving model {model_name}')
 
 print()
 print(f'Progress: {n_examples} / {n_examples} ({t() - start:.3f} seconds)')
