@@ -230,13 +230,6 @@ for epoch in range(epochs):
                             last_improv -= 1
                 if mean_acc[-1] > mean_best:
                     mean_best = mean_acc[-1]
-                if accuracies[-1] > best:
-                    print()
-                    print('New best accuracy! Saving network parameters to disk.')
-
-                    # Save network to disk.
-                    network.save(os.path.join(params_path, model_name + '.pt'))
-                    best = accuracies[-1]
             meter.update()
             print()
             print(f'Epoch {epoch+1} of {epochs}\t'
@@ -250,7 +243,6 @@ for epoch in range(epochs):
                 print(f'Current learning rate: {lr:.5f}')
 
             start = t()
-
         if plot:
             w = network.connections['Y', 'Z'].w
             weights = [
@@ -272,45 +264,11 @@ for epoch in range(epochs):
 
         network.reset_()  # Reset state variables.
 
-    if learn_curve != '':
-        images, labels = test_images[:test_n_examples], test_labels[:test_n_examples]
-        images, labels = iter(images.view(-1, 32 ** 2) / 255), iter(labels)
-        grads = {}
-        accuracies = []
-        predictions = []
-        ground_truth = []
-        best = -np.inf
-        spike_ims, spike_axes, weights1_im, weights2_im = None, None, None, None
-        correct = torch.zeros(update_interval)
-        for i, (image, label) in enumerate(zip(images, labels)):
-            label = torch.Tensor([label]).long()
-            inpts = {
-                'X': image.repeat(time, 1), 'Y_b': torch.ones(time, 1), 'Z_b': torch.ones(time, 1)
-            }
-            network.run(inpts=inpts, time=time)
-            spikes = {l: network.monitors[l].get('s') for l in network.layers if not '_b' in l}
-            summed_inputs = {l: network.layers[l].summed / time for l in network.layers}
-            output = summed_inputs['Z'].softmax(0).view(1, -1)
-            predicted = output.argmax(1).item()
-            correct[i % update_interval] = int(predicted == label[0].item())
-            predictions.append(predicted)
-            ground_truth.append(label)
-            if i > 0 and i % update_interval == 0:
-                accuracies.append(correct.mean() * 100)
-        test_accuracies.append(np.mean(accuracies))
-        print(f'Training set: {np.mean(accuracies):.2f}%')
-        network.reset_()
-
-if train:
-    lr *= lr_decay
-
-    if accuracies[-1] > best:
-        print()
-        print('New best accuracy! Saving network parameters to disk.')
-
-        # Save network to disk.
-        network.save(os.path.join(params_path, model_name + '.pt'))
-        best = accuracies[-1]
+    params = [
+        seed, n_hidden, epoch + 1, time, lr, lr_decay, decay_memory, update_interval
+    ]
+    model_name = '_'.join([str(x) for x in params])
+    network.save(os.path.join(params_path, model_name + '.pt'))
 
 print()
 print(f'Progress: {n_examples} / {n_examples} ({t() - start:.3f} seconds)')
