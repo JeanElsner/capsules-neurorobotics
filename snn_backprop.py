@@ -149,6 +149,7 @@ else:
     _images, _labels = dataset.get_test()
 if learn_curve != '':
     test_images, test_labels = dataset.get_test()
+    test_n_examples = test_images.shape[0]
 n_examples = _images.shape[0]
 
 # Run training.
@@ -272,7 +273,7 @@ for epoch in range(epochs):
         network.reset_()  # Reset state variables.
 
     if learn_curve != '':
-        images, labels = test_images[:n_examples], test_labels[:n_examples]
+        images, labels = test_images[:test_n_examples], test_labels[:test_n_examples]
         images, labels = iter(images.view(-1, 32 ** 2) / 255), iter(labels)
         grads = {}
         accuracies = []
