@@ -232,6 +232,7 @@ for epoch in range(epochs):
                 if mean_acc[-1] > mean_best:
                     mean_best = mean_acc[-1]
                 if accuracies[-1] > best:
+                    best = accuracies[-1]
                     params = [
                         seed, n_hidden, epoch + 1, time, __lr, lr_decay, decay_memory, update_interval
                     ]
