@@ -274,7 +274,13 @@ for epoch in range(epochs):
     if learn_curve != '':
         images, labels = test_images[:n_examples], test_labels[:n_examples]
         images, labels = iter(images.view(-1, 32 ** 2) / 255), iter(labels)
-        correct = []
+        grads = {}
+        accuracies = []
+        predictions = []
+        ground_truth = []
+        best = -np.inf
+        spike_ims, spike_axes, weights1_im, weights2_im = None, None, None, None
+        correct = torch.zeros(update_interval)
         for i, (image, label) in enumerate(zip(images, labels)):
             label = torch.Tensor([label]).long()
             inpts = {
@@ -285,12 +291,13 @@ for epoch in range(epochs):
             summed_inputs = {l: network.layers[l].summed / time for l in network.layers}
             output = summed_inputs['Z'].softmax(0).view(1, -1)
             predicted = output.argmax(1).item()
-            correct.append(int(predicted == label[0].item()))
-            network.reset_()
-        test_accuracies.append(np.mean(correct)*100)
-        print(f'Training set: {np.mean(correct)*100:.2f}%')
-
-#accuracies.append(correct.mean() * 100)
+            correct[i % update_interval] = int(predicted == label[0].item())
+            predictions.append(predicted)
+            ground_truth.append(label)
+            if i > 0 and i % update_interval == 0:
+                accuracies.append(correct.mean() * 100)
+        test_accuracies.append(np.mean(accuracies))
+        print(f'Training set: {np.mean(accuracies):.2f}%')
 
 if train:
     lr *= lr_decay
