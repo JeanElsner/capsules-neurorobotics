@@ -298,6 +298,7 @@ for epoch in range(epochs):
                 accuracies.append(correct.mean() * 100)
         test_accuracies.append(np.mean(accuracies))
         print(f'Training set: {np.mean(accuracies):.2f}%')
+        network.reset_()
 
 if train:
     lr *= lr_decay
