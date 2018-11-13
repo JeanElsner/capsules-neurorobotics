@@ -159,8 +159,9 @@ mean_acc = []
 mean_best = -np.inf
 last_improv = 0
 test_accuracies = []
-tic = t()
+
 for epoch in range(epochs):
+    tic = t()
     images, labels = _images[:n_examples], _labels[:n_examples]
     images, labels = iter(images.view(-1, 32 ** 2) / 255), iter(labels)
     grads = {}
@@ -274,6 +275,7 @@ for epoch in range(epochs):
             plt.pause(1e-8)
 
         network.reset_()  # Reset state variables.
+    print(f'Time was {t()-tic}:.2f')
 
     params = [
         seed, n_hidden, epoch + 1, time, __lr, lr_decay, decay_memory, update_interval
@@ -298,8 +300,6 @@ else:
     print('\nTest complete.\n')
 
 print(f'Average accuracy: {np.mean(accuracies):.3f}')
-print(f'Time was {t()-tic}:.2f')
-
 # Save accuracy curves to disk.
 to_write = ['train'] + params if train else ['test'] + params
 f = '_'.join([str(x) for x in to_write]) + '.pt'
