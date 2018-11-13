@@ -1,4 +1,5 @@
 import torch
+import time
 from utils import AverageMeter, accuracy_from_final_layer, gpu_memory_usage
 
 
@@ -11,7 +12,7 @@ def train(train_loader, model, criterion, optimizer, epoch, epochs=10, log_inter
     running_acc = 0
     running_loss = 0
     num_to_train = len(train_loader.dataset)
-
+    tic = time.time()
     for batch_idx, (data, target) in enumerate(train_loader):
         r = (1. * batch_idx + (epoch - 1) * train_len) / (epochs * train_len)
         data, target = data.cuda(), target.cuda()
@@ -32,9 +33,10 @@ def train(train_loader, model, criterion, optimizer, epoch, epochs=10, log_inter
             print(f'Train Epoch: {epoch}\t[{num_trained}/{num_to_train} ({num_trained/num_to_train*100:.0f}%)]\t'
                   f'Loss: {running_loss/log_interval:.3f}\tAccuracy: {running_acc/log_interval:.1f}\t'
                   f'Time {batch_time.get_total():.3f} ({batch_time.get_average():.3f})'
-                  f'\tMemory: {gpu_memory_usage():.0f}MB')
+                  f'\tMemory: {gpu_memory_usage():.2f}MB')
             running_acc = 0
             running_loss = 0
+    print(f'Epoch took {time.time()-tic:1f} seconds to train.')
     return epoch_acc / len(train_loader)
 
 
@@ -47,6 +49,7 @@ def test(test_loader, model, criterion, chunk=.01):
     labels = []
     predictions = []
     logits = torch.tensor([]).cuda()
+    tic = time.time()
     with torch.no_grad():
         for data, target in test_loader:
             if tested / (test_loader.batch_size * test_len) >= chunk:
@@ -63,4 +66,5 @@ def test(test_loader, model, criterion, chunk=.01):
     acc /= (test_len * chunk)
     print(f'Test set: Average loss: {test_loss:.6f}, Accuracy: {acc:.6f}')
     print()
+    print(f'Epoch took {time.time()-tic:1f} seconds to test.')
     return acc, predictions, labels, logits

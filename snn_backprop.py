@@ -218,6 +218,7 @@ for epoch in range(epochs):
             accuracies.append(correct.mean() * 100)
             mean_acc.append(np.mean(accuracies))
 
+            print(f'Memory: {gpu_memory_usage()}')
             if train:
                 if len(mean_acc) >= decay_memory:
                     mean_acc = mean_acc[-decay_memory:]
@@ -246,8 +247,7 @@ for epoch in range(epochs):
                   # f'Average cross-entropy loss: {losses.mean():.3f}'
                   f'Last interval accuracy: {accuracies[-1]:.3f}\t'
                   f'Average accuracy: {mean_acc[-1]:.3f}\t'
-                  f'Time: {meter.get_total():.0f}s ({meter.get_average():.3f}s)\t'
-                  f'Memory: {gpu_memory_usage()}')
+                  f'Time: {meter.get_total():.0f}s ({meter.get_average():.3f}s)\t')
             if train:
                 print(f'Best average accuracy: {mean_best:.4f}')
                 print(f'Current learning rate: {lr:.5f}')

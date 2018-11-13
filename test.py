@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from model import load_model
 from datasets import load_datasets
-from utils import append_to_csv, path_to_save_string, add_training_arguments, make_dirs_if_not_exist
+from utils import append_to_csv, path_to_save_string, add_training_arguments, make_dirs_if_not_exist, gpu_memory_usage
 from training import test
 from sklearn.metrics import confusion_matrix
 
@@ -55,6 +55,7 @@ def main():
     model.load_state_dict(torch.load(snapshot_path))
     acc, predictions, labels, logits = test(test_loader, model, criterion, chunk=1)
     print(f'Accuracy: {acc:.2f}%')
+    print(f'Memory usage: {gpu_memory_usage()}')
 
     to_write = test_params + [acc.cpu().numpy()]
     append_to_csv(result_path, to_write, header=header)
