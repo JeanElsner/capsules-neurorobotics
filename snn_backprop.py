@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 from time import time as t
 from sklearn.metrics import confusion_matrix
-from utils import AverageMeter
+from utils import AverageMeter, gpu_memory_usage
 from bindsnet.network import Network, load_network
 from bindsnet.utils import get_square_weights
 from bindsnet.network.monitors import Monitor
@@ -246,7 +246,8 @@ for epoch in range(epochs):
                   # f'Average cross-entropy loss: {losses.mean():.3f}'
                   f'Last interval accuracy: {accuracies[-1]:.3f}\t'
                   f'Average accuracy: {mean_acc[-1]:.3f}\t'
-                  f'Time: {meter.get_total():.0f}s ({meter.get_average():.3f}s)\t')
+                  f'Time: {meter.get_total():.0f}s ({meter.get_average():.3f}s)\t'
+                  f'Memory: {gpu_memory_usage()}')
             if train:
                 print(f'Best average accuracy: {mean_best:.4f}')
                 print(f'Current learning rate: {lr:.5f}')
