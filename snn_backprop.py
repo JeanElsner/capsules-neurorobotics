@@ -159,7 +159,7 @@ mean_acc = []
 mean_best = -np.inf
 last_improv = 0
 test_accuracies = []
-tic = time()
+tic = time.time()
 for epoch in range(epochs):
     images, labels = _images[:n_examples], _labels[:n_examples]
     images, labels = iter(images.view(-1, 32 ** 2) / 255), iter(labels)
