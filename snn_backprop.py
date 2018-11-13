@@ -39,7 +39,7 @@ args = parser.parse_args()
 
 seed = args.seed
 n_hidden = args.n_hidden
-__time = args.time
+time = args.time
 lr = args.lr
 __lr = lr
 lr_decay = args.lr_decay
@@ -64,13 +64,13 @@ data = 'vpr'
 model = 'two_layer_backprop'
 
 params = [
-    seed, n_hidden, epochs, __time, lr, lr_decay, decay_memory, update_interval
+    seed, n_hidden, epochs, time, lr, lr_decay, decay_memory, update_interval
 ]
 model_name = '_'.join([str(x) for x in params])
 
 if not train:
     test_params = [
-        seed, n_hidden, epochs, __time, lr, lr_decay, decay_memory, update_interval
+        seed, n_hidden, epochs, time, lr, lr_decay, decay_memory, update_interval
     ]
 
 np.random.seed(seed)
@@ -130,7 +130,7 @@ if train:
 
     # State variable monitoring.
     for l in network.layers:
-        m = Monitor(network.layers[l], state_vars=['s'], time=__time)
+        m = Monitor(network.layers[l], state_vars=['s'], time=time)
         network.add_monitor(m, name=l)
 else:
     network = load_network(os.path.join(params_path, model_name + '.pt'))
@@ -159,7 +159,7 @@ mean_acc = []
 mean_best = -np.inf
 last_improv = 0
 test_accuracies = []
-tic = time.time()
+tic = t.time()
 for epoch in range(epochs):
     images, labels = _images[:n_examples], _labels[:n_examples]
     images, labels = iter(images.view(-1, 32 ** 2) / 255), iter(labels)
@@ -177,13 +177,13 @@ for epoch in range(epochs):
 
         # Run simulation for single datum.
         inpts = {
-            'X': image.repeat(__time, 1), 'Y_b': torch.ones(__time, 1), 'Z_b': torch.ones(__time, 1)
+            'X': image.repeat(time, 1), 'Y_b': torch.ones(time, 1), 'Z_b': torch.ones(time, 1)
         }
-        network.run(inpts=inpts, time=__time)
+        network.run(inpts=inpts, time=time)
 
         # Retrieve spikes and summed inputs from both layers.
         spikes = {l: network.monitors[l].get('s') for l in network.layers if not '_b' in l}
-        summed_inputs = {l: network.layers[l].summed / __time for l in network.layers}
+        summed_inputs = {l: network.layers[l].summed / time for l in network.layers}
 
         # Compute softmax of output spiking activity and get predicted label.
         output = summed_inputs['Z'].softmax(0).view(1, -1)
@@ -236,7 +236,7 @@ for epoch in range(epochs):
                 if accuracies[-1] > best:
                     best = accuracies[-1]
                     params = [
-                        seed, n_hidden, epoch + 1, __time, __lr, lr_decay, decay_memory, update_interval
+                        seed, n_hidden, epoch + 1, time, __lr, lr_decay, decay_memory, update_interval
                     ]
                     model_name = '_'.join([str(x) for x in params])
                     network.save(os.path.join(params_path, model_name + '.pt'))
@@ -276,7 +276,7 @@ for epoch in range(epochs):
         network.reset_()  # Reset state variables.
 
     params = [
-        seed, n_hidden, epoch + 1, __time, __lr, lr_decay, decay_memory, update_interval
+        seed, n_hidden, epoch + 1, time, __lr, lr_decay, decay_memory, update_interval
     ]
     model_name = '_'.join([str(x) for x in params])
     if not os.path.isfile(os.path.join(params_path, model_name + '.pt')):
@@ -298,7 +298,7 @@ else:
     print('\nTest complete.\n')
 
 print(f'Average accuracy: {np.mean(accuracies):.3f}')
-print(f'Time was {time.time()-tic}:.2f')
+print(f'Time was {t.time()-tic}:.2f')
 
 # Save accuracy curves to disk.
 to_write = ['train'] + params if train else ['test'] + params
