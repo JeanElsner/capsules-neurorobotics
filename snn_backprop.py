@@ -34,6 +34,7 @@ parser.add_argument('--gpu', dest='gpu', action='store_true')
 parser.add_argument('--dataset', type=str, default='./data/Dataset_lighting4/left')
 parser.add_argument('--test-dataset', type=str, default='./data/Dataset_lighting4/left')
 parser.add_argument('--learn_curve', type=str, default='')
+parser.add_argument('--roc', type=str, default='')
 parser.set_defaults(plot=False, train=True, gpu=False)
 args = parser.parse_args()
 
@@ -51,6 +52,7 @@ epochs = args.epochs
 decay_memory = args.decay_memory
 learn_curve = args.learn_curve
 dataset = args.dataset
+roc = args.roc
 
 args = vars(args)
 
@@ -167,6 +169,7 @@ for epoch in range(epochs):
     grads = {}
     accuracies = []
     predictions = []
+    logits = []
     ground_truth = []
     best = -np.inf
     spike_ims, spike_axes, weights1_im, weights2_im = None, None, None, None
@@ -188,6 +191,7 @@ for epoch in range(epochs):
 
         # Compute softmax of output spiking activity and get predicted label.
         output = summed_inputs['Z'].softmax(0).view(1, -1)
+        logits.append(output)
         predicted = output.argmax(1).item()
         correct[i % update_interval] = int(predicted == label[0].item())
         predictions.append(predicted)
@@ -309,6 +313,9 @@ results = [np.mean(accuracies), np.max(accuracies)]
 to_write = params + results if train else test_params + results
 to_write = [str(x) for x in to_write]
 name = 'train.csv' if train else 'test.csv'
+
+if roc != '':
+    torch.save((predictions, ground_truth, logits), roc)
 
 if not os.path.isfile(os.path.join(results_path, name)):
     with open(os.path.join(results_path, name), 'w') as f:
