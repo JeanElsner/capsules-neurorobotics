@@ -289,7 +289,7 @@ for epoch in range(epochs):
             plt.pause(1e-8)
 
         network.reset_()  # Reset state variables.
-    print(f'Time was {t()-tic}:.2f')
+    print(f'Time was {t()-tic:.2f}')
 
     params = [
         seed, n_hidden, viewpoint_modulo, epoch + 1, time, __lr, lr_decay, decay_memory, update_interval
