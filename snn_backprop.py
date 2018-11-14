@@ -52,6 +52,7 @@ epochs = args.epochs
 decay_memory = args.decay_memory
 learn_curve = args.learn_curve
 dataset = args.dataset
+test_dataset = args.test_dataset
 roc = args.roc
 
 args = vars(args)
@@ -143,7 +144,10 @@ for __, c in network.connections.items():
 print(f'Network has {num_params} parameters.')
 
 # Load MNIST data.
-dataset = VPR(data_path)
+if train:
+    dataset = VPR(dataset)
+else:
+    dataset = VPR(test_dataset)
 
 if train:
     _images, _labels = dataset.get_train()
