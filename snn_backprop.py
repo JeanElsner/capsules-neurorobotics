@@ -158,9 +158,9 @@ if train:
     _images, _labels = dataset.get_train(azimuth=azimuth, elevation=elevation)
 else:
     epochs = 1
-    _images, _labels = dataset.get_test(azimuth=azimuth, elevation=elevation)
+    _images, _labels = dataset.get_test()
 if learn_curve != '':
-    test_images, test_labels = dataset.get_test(azimuth=azimuth, elevation=elevation)
+    test_images, test_labels = dataset.get_test()
     test_n_examples = test_images.shape[0]
 n_examples = _images.shape[0]
 
