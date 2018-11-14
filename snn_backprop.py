@@ -34,6 +34,7 @@ parser.add_argument('--gpu', dest='gpu', action='store_true')
 parser.add_argument('--dataset', type=str, default='./data/Dataset_lighting4/left')
 parser.add_argument('--test-dataset', type=str, default='./data/Dataset_lighting4/left')
 parser.add_argument('--learn_curve', type=str, default='')
+parser.add_argument('--viewpoint-modulo', type=int, default=1)
 parser.add_argument('--roc', type=str, default='')
 parser.set_defaults(plot=False, train=True, gpu=False)
 args = parser.parse_args()
@@ -54,6 +55,7 @@ learn_curve = args.learn_curve
 dataset = args.dataset
 test_dataset = args.test_dataset
 roc = args.roc
+viewpoint_modulo = args.viewpoint_modulo
 
 args = vars(args)
 
@@ -67,13 +69,13 @@ data = 'vpr'
 model = 'two_layer_backprop'
 
 params = [
-    seed, n_hidden, epochs, time, lr, lr_decay, decay_memory, update_interval
+    seed, n_hidden, viewpoint_modulo, epochs, time, lr, lr_decay, decay_memory, update_interval
 ]
 model_name = '_'.join([str(x) for x in params])
 
 if not train:
     test_params = [
-        seed, n_hidden, epochs, time, lr, lr_decay, decay_memory, update_interval
+        seed, n_hidden, viewpoint_modulo, epochs, time, lr, lr_decay, decay_memory, update_interval
     ]
 
 np.random.seed(seed)
@@ -149,13 +151,16 @@ if train:
 else:
     dataset = VPR(test_dataset)
 
+azimuth = np.arange(1, 19, viewpoint_modulo)
+elevation = np.arange(0, 9, viewpoint_modulo)
+
 if train:
-    _images, _labels = dataset.get_train()
+    _images, _labels = dataset.get_train(azimuth=azimuth, elevation=elevation)
 else:
     epochs = 1
-    _images, _labels = dataset.get_test()
+    _images, _labels = dataset.get_test(azimuth=azimuth, elevation=elevation)
 if learn_curve != '':
-    test_images, test_labels = dataset.get_test()
+    test_images, test_labels = dataset.get_test(azimuth=azimuth, elevation=elevation)
     test_n_examples = test_images.shape[0]
 n_examples = _images.shape[0]
 
@@ -246,7 +251,7 @@ for epoch in range(epochs):
                 if accuracies[-1] > best:
                     best = accuracies[-1]
                     params = [
-                        seed, n_hidden, epoch + 1, time, __lr, lr_decay, decay_memory, update_interval
+                        seed, n_hidden, viewpoint_modulo, epoch + 1, time, __lr, lr_decay, decay_memory, update_interval
                     ]
                     model_name = '_'.join([str(x) for x in params])
                     network.save(os.path.join(params_path, model_name + '.pt'))
@@ -287,7 +292,7 @@ for epoch in range(epochs):
     print(f'Time was {t()-tic}:.2f')
 
     params = [
-        seed, n_hidden, epoch + 1, time, __lr, lr_decay, decay_memory, update_interval
+        seed, n_hidden, viewpoint_modulo, epoch + 1, time, __lr, lr_decay, decay_memory, update_interval
     ]
     model_name = '_'.join([str(x) for x in params])
     if not os.path.isfile(os.path.join(params_path, model_name + '.pt')):
@@ -326,11 +331,11 @@ if not os.path.isfile(os.path.join(results_path, name)):
     with open(os.path.join(results_path, name), 'w') as f:
         if train:
             f.write(
-                'seed,n_hidden,epochs,time,lr,lr_decay,decay_memory,update_interval,mean_accuracy,max_accuracy\n'
+                'seed,n_hidden,viewpoint_modulo,epochs,time,lr,lr_decay,decay_memory,update_interval,mean_accuracy,max_accuracy\n'
             )
         else:
             f.write(
-                'seed,n_hidden,epochs,time,lr,lr_decay,decay_memory,update_interval,mean_accuracy,max_accuracy\n'
+                'seed,n_hidden,viewpoint_modulo,epochs,time,lr,lr_decay,decay_memory,update_interval,mean_accuracy,max_accuracy\n'
             )
 
 with open(os.path.join(results_path, name), 'a') as f:

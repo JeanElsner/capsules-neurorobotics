@@ -57,10 +57,8 @@ class VPR(Dataset):
             orientation = torch.load(open(os.path.join(self.path, VPR.train_orientation_pickle), 'rb'))
 
         indices = np.all([
-            orientation[:, 0] >= elevation[0],
-            orientation[:, 0] <= elevation[1],
-            orientation[:, 1] >= azimuth[0],
-            orientation[:, 1] <= azimuth[1]], axis=0)
+            [i in elevation for i in orientation[:, 0]],
+            [i in azimuth for i in orientation[:, 1]]], axis=0)
         red_images = torch.Tensor(images[indices])
         red_labels = torch.Tensor(labels[indices])
         red_orientation = torch.Tensor(orientation[indices])
@@ -94,10 +92,8 @@ class VPR(Dataset):
             orientation = torch.load(open(os.path.join(self.path, VPR.test_orientation_pickle), 'rb'))
 
         indices = np.all([
-            orientation[:, 0] >= elevation[0],
-            orientation[:, 0] <= elevation[1],
-            orientation[:, 1] >= azimuth[0],
-            orientation[:, 1] <= azimuth[1]], axis=0)
+            [i in elevation for i in orientation[:, 0]],
+            [i in azimuth for i in orientation[:, 1]]], axis=0)
         red_images = torch.Tensor(images[indices])
         red_labels = torch.Tensor(labels[indices])
         red_orientation = torch.Tensor(orientation[indices])
