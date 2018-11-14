@@ -154,13 +154,16 @@ else:
 azimuth = np.arange(1, 19, viewpoint_modulo)
 elevation = np.arange(0, 9, viewpoint_modulo)
 
+test_azimuth = np.arange(1, 19, 1)
+test_elevation = np.arange(0, 9, 1)
+
 if train:
     _images, _labels = dataset.get_train(azimuth=azimuth, elevation=elevation)
 else:
     epochs = 1
-    _images, _labels = dataset.get_test()
+    _images, _labels = dataset.get_test(azimuth=test_azimuth, elevation=test_elevation)
 if learn_curve != '':
-    test_images, test_labels = dataset.get_test()
+    test_images, test_labels = dataset.get_test(azimuth=test_azimuth, elevation=test_elevation)
     test_n_examples = test_images.shape[0]
 n_examples = _images.shape[0]
 
