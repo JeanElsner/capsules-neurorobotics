@@ -169,7 +169,7 @@ for epoch in range(epochs):
     grads = {}
     accuracies = []
     predictions = []
-    logits = []
+    logits = torch.tensor([])
     ground_truth = []
     best = -np.inf
     spike_ims, spike_axes, weights1_im, weights2_im = None, None, None, None
@@ -191,7 +191,8 @@ for epoch in range(epochs):
 
         # Compute softmax of output spiking activity and get predicted label.
         output = summed_inputs['Z'].softmax(0).view(1, -1)
-        logits.append(output)
+
+        logits = torch.cat((logits, output))
         predicted = output.argmax(1).item()
         correct[i % update_interval] = int(predicted == label[0].item())
         predictions.append(predicted)
