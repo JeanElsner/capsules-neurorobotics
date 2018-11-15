@@ -3,7 +3,7 @@ import torch
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
-
+import math
 from time import time as t
 from sklearn.metrics import confusion_matrix
 from utils import AverageMeter, gpu_memory_usage
@@ -151,8 +151,8 @@ if train:
 else:
     dataset = VPR(test_dataset)
 
-azimuth_draw = int(18 * viewpoint_modulo)
-elevation_draw = int(9 * viewpoint_modulo)
+azimuth_draw = math.ceil(18 * viewpoint_modulo)
+elevation_draw = math.ceil(9 * viewpoint_modulo)
 print(f'Drawing {azimuth_draw} from azimuth, {elevation_draw} from elevation.')
 azimuth = np.random.choice(np.arange(1, 19, 1), azimuth_draw, replace=False)
 elevation = np.random.choice(np.arange(0, 9, 1), elevation_draw, replace=False)
