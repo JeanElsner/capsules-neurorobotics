@@ -83,5 +83,5 @@ def add_training_arguments(parser):
     parser.add_argument('--inv-temp', type=float, default=1e-3)
     parser.add_argument('--device-ids', nargs='+', default=[0], type=int)
     parser.add_argument('--append', default=False, action='store_true')
-    parser.add_argument('--viewpoint-modulo', type=int, default=1)
+    parser.add_argument('--viewpoint-modulo', type=float, default=1.)
     parser.add_argument('--learn-curve', type=str, default='')

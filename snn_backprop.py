@@ -34,7 +34,7 @@ parser.add_argument('--gpu', dest='gpu', action='store_true')
 parser.add_argument('--dataset', type=str, default='./data/Dataset_lighting4/left')
 parser.add_argument('--test-dataset', type=str, default='./data/Dataset_lighting4/left')
 parser.add_argument('--learn_curve', type=str, default='')
-parser.add_argument('--viewpoint-modulo', type=int, default=1)
+parser.add_argument('--viewpoint-modulo', type=float, default=1.)
 parser.add_argument('--roc', type=str, default='')
 parser.set_defaults(plot=False, train=True, gpu=False)
 args = parser.parse_args()
@@ -151,8 +151,12 @@ if train:
 else:
     dataset = VPR(test_dataset)
 
-azimuth = np.arange(1, 19, viewpoint_modulo)
-elevation = np.arange(0, 9, viewpoint_modulo)
+azimuth_draw = int(18 * viewpoint_modulo)
+elevation_draw = int(9 * viewpoint_modulo)
+print(f'Drawing {azimuth_draw} from azimuth, {elevation_draw} from elevation.')
+azimuth = np.random.choice(np.arange(1, 19, 1), azimuth_draw, replace=False)
+elevation = np.random.choice(np.arange(0, 9, 1), elevation_draw, replace=False)
+print(azimuth, elevation)
 
 test_azimuth = np.arange(1, 19, 1)
 test_elevation = np.arange(0, 9, 1)
