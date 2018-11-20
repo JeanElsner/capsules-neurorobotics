@@ -3,3 +3,4 @@ data
 *.pth
 .idea
 results
+.ipynb_checkpoints

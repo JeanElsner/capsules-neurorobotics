@@ -79,7 +79,7 @@ def add_training_arguments(parser):
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--log-interval', type=int, default=10)
     parser.add_argument('--routing-iters', type=int, default=2)
-    parser.add_argument('--dataset', type=str, default=r'./data/Dataset_lighting3/left')
+    parser.add_argument('--dataset', type=str, default=r'./data/vp/left')
     parser.add_argument('--inv-temp', type=float, default=1e-3)
     parser.add_argument('--device-ids', nargs='+', default=[0], type=int)
     parser.add_argument('--append', default=False, action='store_true')

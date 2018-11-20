@@ -12,7 +12,7 @@ from sklearn.metrics import confusion_matrix
 parser = argparse.ArgumentParser(description='Visual Pattern Recognition')
 add_training_arguments(parser)
 # Testing arguments
-parser.add_argument('--test-dataset', type=str, default=r'./data/Dataset_lighting1/left')
+parser.add_argument('--test-dataset', type=str, default=r'./data/vp/left')
 parser.add_argument('--roc', type=str, default='')
 
 
@@ -51,7 +51,7 @@ def main():
         args.model, device_ids=args.device_ids, lr=args.lr, routing_iters=args.routing_iters)
 
     num_class, train_loader, test_loader = load_datasets(
-        args.test_dataset, args.batch_size, args.test_batch_size, args.viewpoint_modulo)
+        args.test_dataset, args.batch_size, args.test_batch_size, args.test_viewpoint_modulo)
     model.load_state_dict(torch.load(snapshot_path))
     acc, predictions, labels, logits = test(test_loader, model, criterion, chunk=1)
     print(f'Accuracy: {acc:.2f}%')

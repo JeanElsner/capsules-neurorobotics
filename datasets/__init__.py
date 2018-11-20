@@ -7,15 +7,16 @@ from torchvision.transforms import transforms
 
 
 def load_datasets(path, batch_size, test_batch_size, viewpoint_modulo):
+    viewpoint_modulo = np.sqrt(viewpoint_modulo)
     num_class = 5
-    azimuth_draw = math.ceil(18*viewpoint_modulo)
-    elevation_draw = math.ceil(9*viewpoint_modulo)
+    azimuth_draw = math.ceil(36*viewpoint_modulo)
+    elevation_draw = math.ceil(18*viewpoint_modulo)
     print(f'Drawing {azimuth_draw} from azimuth, {elevation_draw} from elevation.')
-    azimuth = np.random.choice(np.arange(1, 19, 1), azimuth_draw, replace=False)
-    elevation = np.random.choice(np.arange(0, 9, 1), elevation_draw, replace=False)
+    azimuth = np.random.choice(np.arange(1, 37, 1), azimuth_draw, replace=False)
+    elevation = np.random.choice(np.arange(0, 18, 1), elevation_draw, replace=False)
     print(azimuth, elevation)
     train_loader = get_vpr_data_loader(path, batch_size, azimuth, elevation)
-    test_loader = get_vpr_data_loader(path, test_batch_size, np.arange(1, 19), np.arange(0, 9), train=False)
+    test_loader = get_vpr_data_loader(path, test_batch_size, np.arange(1, 37, 1), np.arange(0, 18, 1), train=False)
     print(f'{len(train_loader.dataset)} training images, {len(test_loader.dataset)} test images')
     return num_class, train_loader, test_loader
 
